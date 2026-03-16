@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`slot-recycling-lib` is a Solidity library for recycling freed mapping slots to avoid zero-to-nonzero SSTORE costs. The core mechanism: on logical deletion, leave a non-zero "tombstone" in the slot so the next allocation writes nonzero-to-nonzero (~2,900 gas warm) instead of zero-to-nonzero (~20,000 gas). A `RecycleConfig` value type packs `(vacancyBitOffset, vacancyBitWidth)` into a single `uint16`. The recommended pattern is `immutable` + `create(vacancyBitOffset, vacancyBitWidth)`.
+`slot-recycling-lib` is a Solidity library for recycling freed mapping slots to avoid zero-to-nonzero SSTORE costs. The core mechanism: on logical deletion, leave a non-zero "tombstone" in the slot so the next allocation writes nonzero-to-nonzero (~2,900 gas warm) instead of zero-to-nonzero (~20,000 gas). A `RecycleConfig` value type wraps a precomputed `uint256` vacancy mask. The recommended pattern is `immutable` + `create(vacancyBitOffset, vacancyBitWidth)`.
 
 ## Commands
 
@@ -22,7 +22,7 @@ forge fmt                                                            # format So
 
 ### Core library: `src/SlotRecyclingLib.sol`
 
-- UDT `RecycleConfig` wraps `uint16`: bits 0-7 = vacancyBitOffset, bits 8-15 = vacancyBitWidth.
+- UDT `RecycleConfig` wraps `uint256`: the precomputed vacancy mask.
 - `Pool` struct wraps `mapping(uint256 => uint256)`. Consumer declares in their storage.
 - All library functions are `internal`. Storage-touching functions are state-changing; config accessors are `pure`.
 - Errors (`BadRecycleConfig`, `TombstoneIsZero`, `VacancyFlagNotSet`) are file-level, not inside the library block.

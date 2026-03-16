@@ -34,13 +34,8 @@ Because the source file declares `using SlotRecyclingLib for RecycleConfig globa
 
 ### Type layout
 
-The `RecycleConfig` value type is a `uint16` with the following bit layout:
-
-| Bits | Field | Notes |
-|---|---|---|
-| 0-7 | `vacancyBitOffset` | Start position of the vacancy flag in the 256-bit word |
-| 8-15 | `vacancyBitWidth` | Width of the vacancy flag in bits |
-
+The `RecycleConfig` value type wraps a precomputed `uint256` vacancy mask. The mask is computed by
+`create(offset, width)` and has `width` consecutive bits set starting at bit `offset`.
 A slot is vacant when `slotData & vacancyMask == 0`.
 
 **Byte-alignment:** both offset and width must be multiples of 8. This is a deliberate design choice
@@ -52,10 +47,7 @@ fall on byte boundaries. Sub-byte vacancy flags (e.g., a single bool bit) are no
 | Function | Description |
 |---|---|
 | `SlotRecyclingLib.create(offset, width)` | Creates a `RecycleConfig`. Reverts with `BadRecycleConfig` on invalid parameters. |
-| `cfg.vacancyBitOffset()` | Bit offset of the vacancy flag. |
-| `cfg.vacancyBitWidth()` | Bit width of the vacancy flag. |
-| `cfg.vacancyMask()` | Computed bitmask for vacancy checking. |
-| `cfg.isValid()` | True if `cfg` satisfies the invariants enforced by `create`. |
+| `cfg.vacancyMask()` | Returns the precomputed vacancy mask. |
 | `SlotRecyclingLib.bitmask(offset, width)` | Returns a mask with `width` bits set at `offset`. Compose with OR for clearMask arguments. |
 | `allocate(pool, cfg, searchPointer, packedValue)` | Scan from hint, write to first vacant slot. Reverts if vacancy bits in value are zero. |
 | `free(pool, cfg, index, clearMask)` | Clear bits via mask, leave tombstone. Reverts if tombstone would be zero. |
@@ -88,6 +80,10 @@ Showcase benchmark (create-after-delete):
 - Raw (full-zero delete): 23,613 gas
 - Recycled (tombstone): 2,966 gas
 - **Savings: 87.4%**
+
+Benchmark assumes immediate reuse with `searchPointer` at the freed slot (zero scan iterations).
+Each occupied slot scanned adds a storage read (~100 gas warm, ~2,100 gas cold) and reduces
+realized savings.
 
 Run the benchmark:
 

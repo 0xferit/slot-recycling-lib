@@ -20,20 +20,8 @@ contract RecyclerHarness {
         return SlotRecyclingLib.create(vacancyBitOffset_, vacancyBitWidth_);
     }
 
-    function vacancyBitOffset(RecycleConfig cfg) external pure returns (uint256) {
-        return cfg.vacancyBitOffset();
-    }
-
-    function vacancyBitWidth(RecycleConfig cfg) external pure returns (uint256) {
-        return cfg.vacancyBitWidth();
-    }
-
     function vacancyMask(RecycleConfig cfg) external pure returns (uint256) {
         return cfg.vacancyMask();
-    }
-
-    function isValid(RecycleConfig cfg) external pure returns (bool) {
-        return cfg.isValid();
     }
 
     function allocate(RecycleConfig cfg, uint256 searchPointer, uint256 packedValue) external returns (uint256 index) {
@@ -94,9 +82,8 @@ contract SlotRecyclingLibTest is Test {
     // ── Factory ──
 
     function test_create_validConfig() public view {
-        assertTrue(cfg.isValid());
-        assertEq(harness.vacancyBitOffset(cfg), 192);
-        assertEq(harness.vacancyBitWidth(cfg), 56);
+        uint256 expectedMask = ((uint256(1) << 56) - 1) << 192;
+        assertEq(harness.vacancyMask(cfg), expectedMask);
     }
 
     function test_create_invalidWidth_reverts() public {
@@ -141,6 +128,21 @@ contract SlotRecyclingLibTest is Test {
         harness.free(cfg, idx, CLEAR_MASK);
         uint256 idx2 = harness.allocate(cfg, 0, LIVE_VALUE);
         assertEq(idx, idx2);
+    }
+
+    function test_allocate_findsInteriorGap() public {
+        harness.allocate(cfg, 0, LIVE_VALUE);
+        harness.allocate(cfg, 1, LIVE_VALUE | (uint256(99) << 192));
+        harness.allocate(cfg, 2, LIVE_VALUE | (uint256(77) << 192));
+
+        harness.free(cfg, 1, CLEAR_MASK);
+
+        assertFalse(harness.isVacant(cfg, 0));
+        assertTrue(harness.isVacant(cfg, 1));
+        assertFalse(harness.isVacant(cfg, 2));
+
+        uint256 idx = harness.allocate(cfg, 0, LIVE_VALUE | (uint256(55) << 192));
+        assertEq(idx, 1);
     }
 
     function test_allocate_vacancyFlagZero_reverts() public {
@@ -243,6 +245,14 @@ contract SlotRecyclingLibTest is Test {
         assertEq(harness.findVacant(cfg, 0), 0);
     }
 
+    function test_findVacant_findsInteriorGap() public {
+        harness.allocate(cfg, 0, LIVE_VALUE);
+        harness.allocate(cfg, 1, LIVE_VALUE | (uint256(99) << 192));
+        harness.allocate(cfg, 2, LIVE_VALUE | (uint256(77) << 192));
+        harness.free(cfg, 1, CLEAR_MASK);
+        assertEq(harness.findVacant(cfg, 0), 1);
+    }
+
     // ── Bitmask helper ──
 
     function test_bitmask_correctComputation() public pure {
@@ -272,7 +282,6 @@ contract SlotRecyclingLibTest is Test {
         uint256 offset = bound(uint256(offsetDiv8), 0, 31) * 8;
         uint256 width = bound(uint256(widthDiv8), 1, 31) * 8;
         if (offset + width > 256) return;
-        if (width > 248) return;
 
         RecycleConfig fuzzCfg = harness.create(offset, width);
         uint256 mask = fuzzCfg.vacancyMask();
@@ -310,7 +319,6 @@ contract SlotRecyclingLibTest is Test {
         uint256 offset = bound(uint256(offsetDiv8), 0, 31) * 8;
         uint256 width = bound(uint256(widthDiv8), 1, 31) * 8;
         if (offset + width > 256) return;
-        if (width > 248) return;
 
         RecycleConfig fuzzCfg = harness.create(offset, width);
         uint256 mask = fuzzCfg.vacancyMask();

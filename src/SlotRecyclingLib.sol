@@ -11,11 +11,9 @@ pragma solidity ^0.8.25;
  *         nonzero-to-nonzero. In mapping-backed collections with churn, freed slots can be reused
  *         for new items by leaving a non-zero "tombstone" on deletion instead of fully zeroing.
  *
- *         The `RecycleConfig` value type packs `(vacancyBitOffset, vacancyBitWidth)` into a single
- *         `uint16`. A slot is vacant when `slotData & vacancyMask == 0`.
- *         Type layout (uint16):
- *           bits 0-7  -> vacancyBitOffset (position of the vacancy flag within the 256-bit word)
- *           bits 8-15 -> vacancyBitWidth  (width of the vacancy flag in bits)
+ *         The `RecycleConfig` value type wraps a precomputed `uint256` vacancy mask. The mask has
+ *         consecutive bits set at the position and width specified during `create()`.
+ *         A slot is vacant when `slotData & RecycleConfig.unwrap(cfg) == 0`.
  *
  *         Usage:
  *         ```solidity
@@ -31,7 +29,7 @@ pragma solidity ^0.8.25;
  *         **Important:** Always construct `RecycleConfig` values via `create()`. Using
  *         `RecycleConfig.wrap()` directly bypasses validation and produces undefined behavior.
  */
-type RecycleConfig is uint16;
+type RecycleConfig is uint256;
 
 /// @notice Thrown by `create` when the (vacancyBitOffset, vacancyBitWidth) pair is invalid.
 error BadRecycleConfig(uint256 vacancyBitOffset, uint256 vacancyBitWidth);
@@ -62,6 +60,7 @@ library SlotRecyclingLib {
     /// @notice Creates a `RecycleConfig` from vacancyBitOffset and vacancyBitWidth.
     /// @dev    Both parameters must be multiples of 8. vacancyBitWidth must be >= 8.
     ///         vacancyBitOffset + vacancyBitWidth must be <= 256.
+    ///         The returned config wraps the precomputed vacancy mask.
     ///         **Byte-alignment:** the multiples-of-8 constraint is a deliberate design choice, not
     ///         a technical requirement. It simplifies integration with Solidity's native packed types
     ///         (uint8, uint16, ..., uint248) where field boundaries always fall on byte boundaries.
@@ -73,36 +72,16 @@ library SlotRecyclingLib {
         ) {
             revert BadRecycleConfig(_vacancyBitOffset, _vacancyBitWidth);
         }
-        // Safe: bounds checks above guarantee the result fits in uint16.
-        return RecycleConfig.wrap(uint16(_vacancyBitOffset | (_vacancyBitWidth << 8)));
+        return RecycleConfig.wrap(bitmask(_vacancyBitOffset, _vacancyBitWidth));
     }
 
     // -------------------------------------------------------------------------
-    // Config accessors
+    // Config accessor
     // -------------------------------------------------------------------------
 
-    /// @notice Returns the bit offset of the vacancy flag within the 256-bit word.
-    function vacancyBitOffset(RecycleConfig cfg) internal pure returns (uint256) {
-        return uint256(RecycleConfig.unwrap(cfg)) & 0xFF;
-    }
-
-    /// @notice Returns the bit width of the vacancy flag.
-    function vacancyBitWidth(RecycleConfig cfg) internal pure returns (uint256) {
-        return uint256(RecycleConfig.unwrap(cfg)) >> 8;
-    }
-
-    /// @notice Returns the bitmask for the vacancy flag: bits that must be non-zero for an occupied slot.
+    /// @notice Returns the vacancy mask: bits that must be non-zero for an occupied slot.
     function vacancyMask(RecycleConfig cfg) internal pure returns (uint256) {
-        uint256 width = vacancyBitWidth(cfg);
-        uint256 offset = vacancyBitOffset(cfg);
-        return ((uint256(1) << width) - 1) << offset;
-    }
-
-    /// @notice Returns true if `cfg` satisfies the invariants enforced by `create`.
-    function isValid(RecycleConfig cfg) internal pure returns (bool) {
-        uint256 offset = vacancyBitOffset(cfg);
-        uint256 width = vacancyBitWidth(cfg);
-        return width >= 8 && width <= 248 && offset + width <= 256 && offset % 8 == 0 && width % 8 == 0;
+        return RecycleConfig.unwrap(cfg);
     }
 
     // -------------------------------------------------------------------------
@@ -124,7 +103,8 @@ library SlotRecyclingLib {
     /// @dev    Reverts with `VacancyFlagNotSet` if the vacancy flag bits in `packedValue` are all zero,
     ///         since the slot would appear vacant immediately after writing.
     ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots from
-    ///         `searchPointer`. Use `findVacant` off-chain to compute a tight hint.
+    ///         `searchPointer`. Each slot scanned adds one storage read plus loop overhead (~100 gas
+    ///         warm, ~2,100 gas cold). Use `findVacant` off-chain to compute a tight hint.
     /// @return index The slot index where `packedValue` was stored.
     function allocate(Pool storage pool, RecycleConfig cfg, uint256 searchPointer, uint256 packedValue)
         internal
@@ -199,6 +179,8 @@ library SlotRecyclingLib {
     /// @dev    Intended for off-chain use (view). On-chain callers should use `allocate` which
     ///         combines scanning and writing in a single call.
     ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots.
+    ///         Each slot scanned adds one storage read plus loop overhead (~100 gas warm,
+    ///         ~2,100 gas cold).
     function findVacant(Pool storage pool, RecycleConfig cfg, uint256 searchPointer)
         internal
         view
