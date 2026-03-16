@@ -62,6 +62,10 @@ library SlotRecyclingLib {
     /// @notice Creates a `RecycleConfig` from vacancyBitOffset and vacancyBitWidth.
     /// @dev    Both parameters must be multiples of 8. vacancyBitWidth must be >= 8.
     ///         vacancyBitOffset + vacancyBitWidth must be <= 256.
+    ///         **Byte-alignment:** the multiples-of-8 constraint is a deliberate design choice, not
+    ///         a technical requirement. It simplifies integration with Solidity's native packed types
+    ///         (uint8, uint16, ..., uint248) where field boundaries always fall on byte boundaries.
+    ///         Sub-byte vacancy flags (e.g., a single bool bit) are not supported.
     function create(uint256 _vacancyBitOffset, uint256 _vacancyBitWidth) internal pure returns (RecycleConfig) {
         if (
             _vacancyBitWidth < 8 || _vacancyBitWidth > 248 || _vacancyBitOffset > 248 || _vacancyBitOffset % 8 != 0

@@ -43,6 +43,10 @@ The `RecycleConfig` value type is a `uint16` with the following bit layout:
 
 A slot is vacant when `slotData & vacancyMask == 0`.
 
+**Byte-alignment:** both offset and width must be multiples of 8. This is a deliberate design choice
+to align with Solidity's native packed types (uint8 through uint248), where field boundaries always
+fall on byte boundaries. Sub-byte vacancy flags (e.g., a single bool bit) are not supported.
+
 ### API
 
 | Function | Description |
@@ -52,6 +56,7 @@ A slot is vacant when `slotData & vacancyMask == 0`.
 | `cfg.vacancyBitWidth()` | Bit width of the vacancy flag. |
 | `cfg.vacancyMask()` | Computed bitmask for vacancy checking. |
 | `cfg.isValid()` | True if `cfg` satisfies the invariants enforced by `create`. |
+| `SlotRecyclingLib.bitmask(offset, width)` | Returns a mask with `width` bits set at `offset`. Compose with OR for clearMask arguments. |
 | `allocate(pool, cfg, searchPointer, packedValue)` | Scan from hint, write to first vacant slot. Reverts if vacancy bits in value are zero. |
 | `free(pool, cfg, index, clearMask)` | Clear bits via mask, leave tombstone. Reverts if tombstone would be zero. |
 | `freeWithSentinel(pool, cfg, index, sentinel)` | Write fixed sentinel as tombstone. For cases where no field naturally stays non-zero. |
@@ -66,6 +71,8 @@ A slot is vacant when `slotData & vacancyMask == 0`.
 error BadRecycleConfig(uint256 vacancyBitOffset, uint256 vacancyBitWidth);
 error TombstoneIsZero();
 error VacancyFlagNotSet(uint256 packedValue);
+error ClearMaskIncomplete(uint256 clearMask);
+error SentinelOccupied(uint256 sentinel);
 ```
 
 ## Gas economics

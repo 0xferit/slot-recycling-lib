@@ -9,6 +9,10 @@ optimizer_runs = 0x10000
 [fuzz]
 runs = 0x10000
 
+[invariant]
+runs = 256
+depth = 64
+
 [dependencies]
 forge-std = "1.14.0"
 
