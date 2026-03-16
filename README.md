@@ -2,7 +2,45 @@
 
 EVM charges ~20,000 gas for a zero-to-nonzero SSTORE but only ~2,900 gas (warm) for nonzero-to-nonzero. In mapping-backed collections with churn, this library recycles freed slots by leaving a non-zero "tombstone" on deletion instead of fully zeroing. The next allocation overwrites the tombstoned slot at the cheaper rate.
 
-**Quick start:**
+## How it works
+
+When a Solidity contract uses `delete` on a mapping entry, the slot is set to zero. The next time that slot is written, the EVM treats it as a zero-to-nonzero transition and charges the full 20,000 gas SSTORE cost.
+
+This library avoids that by never fully zeroing a slot. On deletion, it clears only the bits you specify (via a "clear mask") and leaves the rest as a non-zero tombstone. The slot stays dirty, so the next write is a cheap nonzero-to-nonzero transition (~2,900 gas warm).
+
+To tell vacant slots apart from occupied ones, the library uses a **vacancy flag**: a configurable bit range within the 256-bit word. When those bits are zero, the slot is vacant and available for reuse. Any packed struct that has a field guaranteed to be non-zero when occupied (e.g., an amount, a timestamp, an address) can serve as the vacancy flag.
+
+The lifecycle:
+
+1. **Allocate**: scan from a hint index, find the first slot where the vacancy flag bits are zero, write the new packed value.
+2. **Free**: clear the vacancy flag bits (and optionally others) via a bitmask, leaving a non-zero tombstone.
+3. **Re-allocate**: the freed slot is found by the next scan and overwritten at the cheap SSTORE rate.
+
+## Gas economics
+
+Post-London (EIP-2929 + EIP-3529):
+
+| SSTORE transition | Warm | Cold |
+|---|---|---|
+| zero to nonzero | 20,000 | 22,100 |
+| nonzero to nonzero | 2,900 | 5,000 |
+
+Showcase benchmark (create-after-delete):
+- Raw (full-zero delete): 23,613 gas
+- Recycled (tombstone): 2,966 gas
+- **Savings: 87.4%**
+
+Benchmark assumes immediate reuse with `searchPointer` at the freed slot (zero scan iterations).
+Each occupied slot scanned adds a storage read (~100 gas warm, ~2,100 gas cold) and reduces
+realized savings.
+
+Run the benchmark:
+
+```bash
+forge test --match-path test/showcase/ShowcaseGas.t.sol -vv
+```
+
+## Quick start
 
 ```solidity
 import {RecycleConfig, SlotRecyclingLib} from "slot-recycling-lib/src/SlotRecyclingLib.sol";
@@ -65,30 +103,6 @@ error TombstoneIsZero();
 error VacancyFlagNotSet(uint256 packedValue);
 error ClearMaskIncomplete(uint256 clearMask);
 error SentinelOccupied(uint256 sentinel);
-```
-
-## Gas economics
-
-Post-London (EIP-2929 + EIP-3529):
-
-| SSTORE transition | Warm | Cold |
-|---|---|---|
-| zero to nonzero | 20,000 | 22,100 |
-| nonzero to nonzero | 2,900 | 5,000 |
-
-Showcase benchmark (create-after-delete):
-- Raw (full-zero delete): 23,613 gas
-- Recycled (tombstone): 2,966 gas
-- **Savings: 87.4%**
-
-Benchmark assumes immediate reuse with `searchPointer` at the freed slot (zero scan iterations).
-Each occupied slot scanned adds a storage read (~100 gas warm, ~2,100 gas cold) and reduces
-realized savings.
-
-Run the benchmark:
-
-```bash
-forge test --match-path test/showcase/ShowcaseGas.t.sol -vv
 ```
 
 ## Showcase
