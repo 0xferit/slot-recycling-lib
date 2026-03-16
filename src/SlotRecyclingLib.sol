@@ -47,7 +47,7 @@ error ClearMaskIncomplete(uint256 clearMask);
 error SentinelOccupied(uint256 sentinel);
 
 library SlotRecyclingLib {
-    string internal constant VERSION = "1.0.3";
+    string internal constant VERSION = "1.0.4";
 
     struct Pool {
         mapping(uint256 => uint256) _data;
