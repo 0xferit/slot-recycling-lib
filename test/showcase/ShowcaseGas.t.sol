@@ -51,6 +51,123 @@ contract ShowcaseGasTest is Test {
         assertTrue(recycledCreateAfterDelete < rawCreateAfterDelete, "recycled should be cheaper");
     }
 
+    /// @notice Realistic scenario: pool has occupied slots, freed slot is not at the front.
+    /// @dev    Scenario: create 10 articles, delete the one at index 5, then create a new article
+    ///         with searchPointer = 0. The allocator must scan past 5 occupied slots before finding
+    ///         the vacancy. Compared against the raw path which always appends to nextId (no scan).
+    function test_gasComparison_realisticScan() public {
+        // --- Populate both pools with 10 articles ---
+        for (uint56 i = 1; i <= 10; i++) {
+            raw.createArticle(i * 100, uint8(i));
+            recycled.createArticle(i * 100, uint8(i));
+        }
+
+        // --- Raw path: delete article 5, create again (always appends to fresh slot) ---
+        raw.deleteArticle(5);
+
+        uint256 gasBefore = gasleft();
+        raw.createArticle(999, 7);
+        uint256 rawGas = gasBefore - gasleft();
+
+        // --- Recycled path: delete article 5, create with searchPointer=0 (scans past 5 slots) ---
+        recycled.deleteArticle(5);
+
+        gasBefore = gasleft();
+        recycled.createArticle(999, 7);
+        uint256 recycledGas = gasBefore - gasleft();
+
+        console.log("realistic raw gas:      ", rawGas);
+        console.log("realistic recycled gas:  ", recycledGas);
+        console.log("realistic savings gas:   ", rawGas - recycledGas);
+
+        uint256 savingsBps = ((rawGas - recycledGas) * 10000) / rawGas;
+        console.log("realistic savings bps:   ", savingsBps);
+
+        assertTrue(recycledGas < rawGas, "recycled should still be cheaper with scan overhead");
+    }
+
+    /// @notice Lifecycle benchmark: 20 creates and 10 deletes interleaved over time.
+    /// @dev    Simulates a content board with churn. The sequence:
+    ///           Phase 1: create 10 articles                    (10 fresh writes, no recycling possible)
+    ///           Phase 2: delete 5 of them (indices 1,3,5,7,9)  (5 deletes)
+    ///           Phase 3: create 5 more                         (raw: fresh slots; recycled: reuses tombstoned slots)
+    ///           Phase 4: delete 5 more (indices 0,2,4,6,8)     (5 deletes)
+    ///           Phase 5: create 5 more                         (raw: fresh slots; recycled: reuses tombstoned slots)
+    ///         Total: 20 creates, 10 deletes. Of the 20 creates, 10 are fresh (no recycling benefit)
+    ///         and 10 hit recycled slots (where the library saves gas).
+    function test_gasComparison_lifecycle() public {
+        uint256 rawTotal;
+        uint256 recycledTotal;
+        uint256 gasBefore;
+
+        // Phase 1: 10 fresh creates (both paths write to zero slots)
+        for (uint56 i = 1; i <= 10; i++) {
+            gasBefore = gasleft();
+            raw.createArticle(i * 100, uint8(i));
+            rawTotal += gasBefore - gasleft();
+
+            gasBefore = gasleft();
+            recycled.createArticle(i * 100, uint8(i));
+            recycledTotal += gasBefore - gasleft();
+        }
+
+        // Phase 2: delete odd indices (1,3,5,7,9)
+        for (uint256 i = 1; i <= 9; i += 2) {
+            gasBefore = gasleft();
+            raw.deleteArticle(i);
+            rawTotal += gasBefore - gasleft();
+
+            gasBefore = gasleft();
+            recycled.deleteArticle(i);
+            recycledTotal += gasBefore - gasleft();
+        }
+
+        // Phase 3: 5 creates (raw: fresh slots 10-14; recycled: reuses tombstoned odd slots)
+        for (uint56 i = 11; i <= 15; i++) {
+            gasBefore = gasleft();
+            raw.createArticle(i * 100, uint8(i % 10));
+            rawTotal += gasBefore - gasleft();
+
+            gasBefore = gasleft();
+            recycled.createArticle(i * 100, uint8(i % 10));
+            recycledTotal += gasBefore - gasleft();
+        }
+
+        // Phase 4: delete even indices (0,2,4,6,8)
+        for (uint256 i = 0; i <= 8; i += 2) {
+            gasBefore = gasleft();
+            raw.deleteArticle(i);
+            rawTotal += gasBefore - gasleft();
+
+            gasBefore = gasleft();
+            recycled.deleteArticle(i);
+            recycledTotal += gasBefore - gasleft();
+        }
+
+        // Phase 5: 5 more creates (raw: fresh slots 15-19; recycled: reuses tombstoned even slots)
+        for (uint56 i = 16; i <= 20; i++) {
+            gasBefore = gasleft();
+            raw.createArticle(i * 100, uint8(i % 10));
+            rawTotal += gasBefore - gasleft();
+
+            gasBefore = gasleft();
+            recycled.createArticle(i * 100, uint8(i % 10));
+            recycledTotal += gasBefore - gasleft();
+        }
+
+        console.log("--- lifecycle: 20 creates, 10 deletes ---");
+        console.log("  fresh creates (no reuse):  10");
+        console.log("  recycled creates (reuse):  10");
+        console.log("  raw total gas:             ", rawTotal);
+        console.log("  recycled total gas:        ", recycledTotal);
+        console.log("  total savings gas:         ", rawTotal - recycledTotal);
+
+        uint256 savingsBps = ((rawTotal - recycledTotal) * 10000) / rawTotal;
+        console.log("  lifecycle savings bps:     ", savingsBps);
+
+        assertTrue(recycledTotal < rawTotal, "recycled should be cheaper over full lifecycle");
+    }
+
     /// @notice Measures gas for first-time creation (no prior delete, no recycling benefit).
     /// @dev    Both paths write to a fresh zero slot, so the SSTORE cost is the same.
     ///         This test confirms the library does not add meaningful overhead on the non-recycling path.

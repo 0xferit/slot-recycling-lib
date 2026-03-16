@@ -27,27 +27,35 @@ Post-London (EIP-2929 + EIP-3529):
 | zero to nonzero | 20,000 | 22,100 |
 | nonzero to nonzero | 2,900 | 5,000 |
 
-### Benchmark scenario
+### Benchmarks
 
-The badge and numbers below come from a specific test (`ShowcaseGas.t.sol`):
+All benchmarks come from `ShowcaseGas.t.sol` and run within a single transaction (warm storage).
 
-1. Create an article (writes a packed word to a mapping slot).
-2. Delete it: `RawArticleStore` uses `delete` (zeros the slot); `RecycledArticleStore` uses `free` (leaves a tombstone).
-3. Create another article that lands in the same slot.
+**Lifecycle: 20 creates, 10 deletes (50% reuse rate)**
 
-Step 3 is where the difference shows. The raw path pays zero-to-nonzero (expensive); the recycled
-path pays nonzero-to-nonzero (cheap). Both measurements happen in the same transaction with warm
-storage access, and the recycled path's `searchPointer` is already at the freed slot (zero scan
-iterations).
+Simulates a content board with churn. 10 articles are created, 5 deleted, 5 created (reusing freed
+slots), 5 more deleted, 5 more created (reusing again). Of the 20 total creates, 10 are fresh writes
+and 10 land on recycled slots.
 
-- Raw (full-zero delete): 23,613 gas
-- Recycled (tombstone): 2,966 gas
-- **Savings: 87.4%**
+| | Total gas | Savings |
+|---|---|---|
+| Raw (standard delete) | 510,710 | |
+| Recycled (tombstone) | 324,863 | **36.4%** |
 
-Real-world savings depend on two things: whether the slot access is warm or cold, and how many
-occupied slots `allocate` must scan before finding a vacancy. Each occupied slot scanned adds
-~100 gas (warm) or ~2,100 gas (cold). With a tight off-chain hint via `findVacant`, scan overhead
-is near zero.
+**Per-write: create-after-delete (best case, zero scan)**
+
+Isolates the single-write savings. Create one article, delete it, create another. The recycled path
+finds the freed slot immediately with no scan.
+
+| | Gas | Savings |
+|---|---|---|
+| Raw (full-zero delete) | 23,613 | |
+| Recycled (tombstone) | 2,800 | **88.1%** |
+
+The per-write savings are up to 88%, but lifetime savings depend on your reuse rate: how often a
+create lands on a recycled slot vs. a fresh one. Scan overhead also matters: each occupied slot
+scanned adds ~100 gas (warm) or ~2,100 gas (cold). An off-chain hint via `findVacant` keeps scan
+cost near zero.
 
 Run the benchmark:
 
