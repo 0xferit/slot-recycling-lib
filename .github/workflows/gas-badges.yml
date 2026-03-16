@@ -33,18 +33,30 @@ jobs:
 
           extract() { grep "$1" gas_output.txt | awk '{print $NF}'; }
 
-          recycling_bps=$(extract "lifecycle savings bps")
+          lifecycle_bps=$(extract "lifecycle savings bps")
+          bestcase_bps=$(extract "recycling savings bps")
 
-          [[ "$recycling_bps" =~ ^[0-9]+$ ]] || { echo "Failed to parse: '$recycling_bps'"; exit 1; }
+          [[ "$lifecycle_bps" =~ ^[0-9]+$ ]] || { echo "Failed to parse lifecycle: '$lifecycle_bps'"; exit 1; }
+          [[ "$bestcase_bps" =~ ^[0-9]+$ ]] || { echo "Failed to parse bestcase: '$bestcase_bps'"; exit 1; }
 
-          recycling_pct=$(awk -v bps="$recycling_bps" 'BEGIN { printf "%.1f", bps / 100 }')
+          lifecycle_pct=$(awk -v bps="$lifecycle_bps" 'BEGIN { printf "%.1f", bps / 100 }')
+          bestcase_pct=$(awk -v bps="$bestcase_bps" 'BEGIN { printf "%.1f", bps / 100 }')
 
           mkdir -p .badges
           cat > .badges/recycling-savings.json <<EOF
           {
             "schemaVersion": 1,
             "label": "lifecycle (50% reuse): gas saved",
-            "message": "${recycling_pct}%",
+            "message": "${lifecycle_pct}%",
+            "color": "brightgreen"
+          }
+          EOF
+
+          cat > .badges/bestcase-savings.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "per recycled write: gas saved",
+            "message": "${bestcase_pct}%",
             "color": "brightgreen"
           }
           EOF
