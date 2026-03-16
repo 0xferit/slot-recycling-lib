@@ -1,3 +1,9 @@
+## [1.0.7](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.6...v1.0.7) (2026-03-16)
+
+### Bug Fixes
+
+* review polish: parentheses, double-free docs, showcase parity, sentinel test, benchmark docs ([0e35468](https://github.com/0xferit/slot-recycling-lib/commit/0e35468b0d3409229c3be42c8f5aa86958f87327))
+
 ## [1.0.6](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.5...v1.0.6) (2026-03-16)
 
 ## [1.0.5](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.4...v1.0.5) (2026-03-16)
