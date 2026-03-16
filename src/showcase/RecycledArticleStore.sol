@@ -41,9 +41,14 @@ contract RecycledArticleStore {
         emit ArticleDeleted(_id);
     }
 
-    function readArticle(uint256 _id) external view returns (address owner, uint56 bountyAmount, uint8 category) {
+    function readArticle(uint256 _id)
+        external
+        view
+        returns (address owner, uint32 withdrawalPermittedAt, uint56 bountyAmount, uint8 category)
+    {
         uint256 raw = SlotRecyclingLib.load(_pool, _id);
         owner = address(uint160(raw));
+        withdrawalPermittedAt = uint32(raw >> 160);
         bountyAmount = uint56(raw >> 192);
         category = uint8(raw >> 248);
     }

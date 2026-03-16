@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 
 import {Test} from "forge-std/Test.sol";
-import {RecycleConfig, SlotRecyclingLib, VacancyFlagNotSet, TombstoneIsZero} from "src/SlotRecyclingLib.sol";
+import {RecycleConfig, SlotRecyclingLib} from "src/SlotRecyclingLib.sol";
 
 /// @notice Handler that exposes allocate/free as external calls for Foundry's invariant tester.
 ///         Tracks which slots are occupied so the invariant test can verify properties.

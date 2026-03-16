@@ -111,12 +111,12 @@ library SlotRecyclingLib {
         returns (uint256 index)
     {
         uint256 mask = vacancyMask(cfg);
-        if (packedValue & mask == 0) revert VacancyFlagNotSet(packedValue);
+        if ((packedValue & mask) == 0) revert VacancyFlagNotSet(packedValue);
 
         uint256 ptr = searchPointer;
-        while (pool._data[ptr] & mask != 0) {
+        while ((pool._data[ptr] & mask) != 0) {
             unchecked {
-                ptr++;
+                ptr++; // Wraparound infeasible: requires 2^256 occupied slots.
             }
         }
         pool._data[ptr] = packedValue;
@@ -126,6 +126,8 @@ library SlotRecyclingLib {
     /// @notice Mark a slot as vacant by clearing bits specified in `clearMask`.
     /// @dev    The remaining bits form the "tombstone" that keeps the slot non-zero.
     ///         Reverts with `TombstoneIsZero` if the result would be zero.
+    ///         Does not check whether the slot is currently occupied; freeing an already-vacant
+    ///         slot is silently permitted if the resulting tombstone is non-zero.
     /// @return freedValue The original value that was in the slot before freeing.
     function free(Pool storage pool, RecycleConfig cfg, uint256 index, uint256 clearMask)
         internal
@@ -136,7 +138,7 @@ library SlotRecyclingLib {
         if (tombstone == 0) revert TombstoneIsZero();
         // Verify vacancy flag is actually cleared.
         uint256 mask = vacancyMask(cfg);
-        if (tombstone & mask != 0) {
+        if ((tombstone & mask) != 0) {
             revert ClearMaskIncomplete(clearMask);
         }
         pool._data[index] = tombstone;
@@ -145,6 +147,8 @@ library SlotRecyclingLib {
     /// @notice Mark a slot as vacant by writing a fixed sentinel value.
     /// @dev    Use when no field naturally stays non-zero after clearing.
     ///         The sentinel must be non-zero and must have vacancy flag bits == 0.
+    ///         Does not check whether the slot is currently occupied; freeing an already-vacant
+    ///         slot overwrites its tombstone with the sentinel.
     /// @return freedValue The original value that was in the slot before freeing.
     function freeWithSentinel(Pool storage pool, RecycleConfig cfg, uint256 index, uint256 sentinel)
         internal
@@ -152,7 +156,7 @@ library SlotRecyclingLib {
     {
         if (sentinel == 0) revert TombstoneIsZero();
         uint256 mask = vacancyMask(cfg);
-        if (sentinel & mask != 0) revert SentinelOccupied(sentinel);
+        if ((sentinel & mask) != 0) revert SentinelOccupied(sentinel);
         freedValue = pool._data[index];
         pool._data[index] = sentinel;
     }
@@ -172,7 +176,7 @@ library SlotRecyclingLib {
 
     /// @notice Returns true if the slot at `index` is vacant (vacancy flag bits are all zero).
     function isVacant(Pool storage pool, RecycleConfig cfg, uint256 index) internal view returns (bool) {
-        return pool._data[index] & vacancyMask(cfg) == 0;
+        return (pool._data[index] & vacancyMask(cfg)) == 0;
     }
 
     /// @notice Find the next vacant slot starting from `searchPointer`.
@@ -188,9 +192,9 @@ library SlotRecyclingLib {
     {
         uint256 mask = vacancyMask(cfg);
         uint256 ptr = searchPointer;
-        while (pool._data[ptr] & mask != 0) {
+        while ((pool._data[ptr] & mask) != 0) {
             unchecked {
-                ptr++;
+                ptr++; // Wraparound infeasible: requires 2^256 occupied slots.
             }
         }
         return ptr;

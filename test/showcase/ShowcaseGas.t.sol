@@ -5,6 +5,11 @@ import {Test, console} from "forge-std/Test.sol";
 import {RawArticleStore} from "src/showcase/RawArticleStore.sol";
 import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 
+/// @title  ShowcaseGasTest
+/// @notice Gas benchmarks comparing RawArticleStore (standard delete) vs RecycledArticleStore
+///         (tombstoned slot recycling). All measurements happen within a single transaction,
+///         so storage accesses are warm. The recycled path uses searchPointer = 0 with only
+///         the freed slot in the pool, meaning zero scan iterations.
 contract ShowcaseGasTest is Test {
     RawArticleStore raw;
     RecycledArticleStore recycled;
@@ -14,7 +19,11 @@ contract ShowcaseGasTest is Test {
         recycled = new RecycledArticleStore();
     }
 
-    /// @notice Measures gas for create-after-delete (the recycling case).
+    /// @notice Measures gas for the create-after-delete scenario.
+    /// @dev    Scenario: create one article, delete it, then create another in the same slot.
+    ///         Raw path: delete zeros the slot, so the second create is zero-to-nonzero (expensive).
+    ///         Recycled path: free leaves a tombstone, so the second create is nonzero-to-nonzero (cheap).
+    ///         This is the best-case scenario for the library; real savings depend on scan overhead.
     function test_gasComparison_recycledVsFresh() public {
         // --- Raw path: create, delete (full zero), create again (zero-to-nonzero) ---
         raw.createArticle(100, 1);
@@ -42,7 +51,9 @@ contract ShowcaseGasTest is Test {
         assertTrue(recycledCreateAfterDelete < rawCreateAfterDelete, "recycled should be cheaper");
     }
 
-    /// @notice Measures gas for first-time creation (no recycling benefit).
+    /// @notice Measures gas for first-time creation (no prior delete, no recycling benefit).
+    /// @dev    Both paths write to a fresh zero slot, so the SSTORE cost is the same.
+    ///         This test confirms the library does not add meaningful overhead on the non-recycling path.
     function test_gasComparison_freshAllocation() public {
         uint256 gasBefore = gasleft();
         raw.createArticle(100, 1);

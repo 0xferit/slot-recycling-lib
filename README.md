@@ -1,6 +1,6 @@
 # slot-recycling-lib
 
-[![Slot Recycling: Gas Savings](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/0xferit/slot-recycling-lib/gh-badges/.badges/recycling-savings.json)](test/showcase/ShowcaseGas.t.sol)
+[![create-after-delete: gas saved](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/0xferit/slot-recycling-lib/gh-badges/.badges/recycling-savings.json)](test/showcase/ShowcaseGas.t.sol)
 
 EVM charges ~20,000 gas for a zero-to-nonzero SSTORE but only ~2,900 gas (warm) for nonzero-to-nonzero. In mapping-backed collections with churn, this library recycles freed slots by leaving a non-zero "tombstone" on deletion instead of fully zeroing. The next allocation overwrites the tombstoned slot at the cheaper rate.
 
@@ -27,14 +27,27 @@ Post-London (EIP-2929 + EIP-3529):
 | zero to nonzero | 20,000 | 22,100 |
 | nonzero to nonzero | 2,900 | 5,000 |
 
-Showcase benchmark (create-after-delete):
+### Benchmark scenario
+
+The badge and numbers below come from a specific test (`ShowcaseGas.t.sol`):
+
+1. Create an article (writes a packed word to a mapping slot).
+2. Delete it: `RawArticleStore` uses `delete` (zeros the slot); `RecycledArticleStore` uses `free` (leaves a tombstone).
+3. Create another article that lands in the same slot.
+
+Step 3 is where the difference shows. The raw path pays zero-to-nonzero (expensive); the recycled
+path pays nonzero-to-nonzero (cheap). Both measurements happen in the same transaction with warm
+storage access, and the recycled path's `searchPointer` is already at the freed slot (zero scan
+iterations).
+
 - Raw (full-zero delete): 23,613 gas
 - Recycled (tombstone): 2,966 gas
 - **Savings: 87.4%**
 
-Benchmark assumes immediate reuse with `searchPointer` at the freed slot (zero scan iterations).
-Each occupied slot scanned adds a storage read (~100 gas warm, ~2,100 gas cold) and reduces
-realized savings.
+Real-world savings depend on two things: whether the slot access is warm or cold, and how many
+occupied slots `allocate` must scan before finding a vacancy. Each occupied slot scanned adds
+~100 gas (warm) or ~2,100 gas (cold). With a tight off-chain hint via `findVacant`, scan overhead
+is near zero.
 
 Run the benchmark:
 

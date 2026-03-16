@@ -43,7 +43,7 @@ jobs:
           cat > .badges/recycling-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "slot recycling: gas savings",
+            "label": "create-after-delete: gas saved",
             "message": "${recycling_pct}%",
             "color": "brightgreen"
           }

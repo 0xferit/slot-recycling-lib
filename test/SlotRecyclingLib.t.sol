@@ -199,6 +199,14 @@ contract SlotRecyclingLibTest is Test {
         assertTrue(harness.isVacant(cfg, 0));
     }
 
+    function test_allocate_reusesSlotAfterSentinelFree() public {
+        uint256 idx = harness.allocate(cfg, 0, LIVE_VALUE);
+        harness.freeWithSentinel(cfg, idx, 1);
+        assertTrue(harness.isVacant(cfg, idx));
+        uint256 idx2 = harness.allocate(cfg, 0, LIVE_VALUE);
+        assertEq(idx, idx2);
+    }
+
     function test_freeWithSentinel_zeroSentinel_reverts() public {
         harness.store(0, LIVE_VALUE);
         vm.expectRevert(TombstoneIsZero.selector);
