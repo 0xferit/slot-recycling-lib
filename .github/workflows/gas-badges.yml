@@ -33,7 +33,7 @@ jobs:
 
           extract() { grep "$1" gas_output.txt | awk '{print $NF}'; }
 
-          recycling_bps=$(extract "recycling savings bps")
+          recycling_bps=$(extract "lifecycle savings bps")
 
           [[ "$recycling_bps" =~ ^[0-9]+$ ]] || { echo "Failed to parse: '$recycling_bps'"; exit 1; }
 
@@ -43,7 +43,7 @@ jobs:
           cat > .badges/recycling-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "create-after-delete: gas saved",
+            "label": "lifecycle (50% reuse): gas saved",
             "message": "${recycling_pct}%",
             "color": "brightgreen"
           }

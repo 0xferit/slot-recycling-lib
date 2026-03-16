@@ -1,6 +1,6 @@
 # slot-recycling-lib
 
-[![create-after-delete: gas saved](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/0xferit/slot-recycling-lib/gh-badges/.badges/recycling-savings.json)](test/showcase/ShowcaseGas.t.sol)
+[![lifecycle (50% reuse): gas saved](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/0xferit/slot-recycling-lib/gh-badges/.badges/recycling-savings.json)](test/showcase/ShowcaseGas.t.sol)
 
 EVM charges ~20,000 gas for a zero-to-nonzero SSTORE but only ~2,900 gas (warm) for nonzero-to-nonzero. In mapping-backed collections with churn, this library recycles freed slots by leaving a non-zero "tombstone" on deletion instead of fully zeroing. The next allocation overwrites the tombstoned slot at the cheaper rate.
 
@@ -53,9 +53,9 @@ finds the freed slot immediately with no scan.
 | Recycled (tombstone) | 2,800 | **88.1%** |
 
 The per-write savings are up to 88%, but lifetime savings depend on your reuse rate: how often a
-create lands on a recycled slot vs. a fresh one. Scan overhead also matters: each occupied slot
-scanned adds ~100 gas (warm) or ~2,100 gas (cold). An off-chain hint via `findVacant` keeps scan
-cost near zero.
+create lands on a recycled slot vs. a fresh one. The per-write benchmark assumes zero scan iterations;
+this is realistic in practice because `findVacant` (a view function) can locate the next vacancy
+off-chain, and the on-chain `allocate` call starts at that exact index.
 
 Run the benchmark:
 
