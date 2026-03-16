@@ -1,3 +1,14 @@
+## [1.0.3](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.2...v1.0.3) (2026-03-16)
+
+### ⚠ BREAKING CHANGES
+
+* RecycleConfig underlying type changed from uint16 to
+uint256. Three accessor functions removed from the public API.
+
+### Features
+
+* replace packed uint16 config with precomputed uint256 vacancy mask ([8c5ad53](https://github.com/0xferit/slot-recycling-lib/commit/8c5ad53cdb80374a3717126a08846b0b49ce0cc4))
+
 ## [1.0.2](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.1...v1.0.2) (2026-03-16)
 
 ## [1.0.1](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.0...v1.0.1) (2026-03-16)
