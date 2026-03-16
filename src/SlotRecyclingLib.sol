@@ -42,6 +42,12 @@ error TombstoneIsZero();
 /// @notice Thrown by `allocate` when the packed value has vacancy flag bits all-zero.
 error VacancyFlagNotSet(uint256 packedValue);
 
+/// @notice Thrown by `free` when clearMask does not cover the vacancy flag bits.
+error ClearMaskIncomplete(uint256 clearMask);
+
+/// @notice Thrown by `freeWithSentinel` when the sentinel has vacancy flag bits set.
+error SentinelOccupied(uint256 sentinel);
+
 library SlotRecyclingLib {
     string internal constant VERSION = "0.1.0";
 
@@ -58,8 +64,8 @@ library SlotRecyclingLib {
     ///         vacancyBitOffset + vacancyBitWidth must be <= 256.
     function create(uint256 _vacancyBitOffset, uint256 _vacancyBitWidth) internal pure returns (RecycleConfig) {
         if (
-            _vacancyBitWidth < 8 || _vacancyBitWidth > 248 || _vacancyBitOffset + _vacancyBitWidth > 256
-                || _vacancyBitOffset % 8 != 0 || _vacancyBitWidth % 8 != 0
+            _vacancyBitWidth < 8 || _vacancyBitWidth > 248 || _vacancyBitOffset > 248 || _vacancyBitOffset % 8 != 0
+                || _vacancyBitWidth % 8 != 0 || _vacancyBitOffset + _vacancyBitWidth > 256
         ) {
             revert BadRecycleConfig(_vacancyBitOffset, _vacancyBitWidth);
         }
@@ -96,12 +102,25 @@ library SlotRecyclingLib {
     }
 
     // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    /// @notice Returns a bitmask with `width` bits set starting at `offset`.
+    /// @dev    Convenience for building clearMask arguments. Compose multiple ranges with OR:
+    ///         `bitmask(160, 32) | bitmask(192, 56)` clears bits 160-247.
+    function bitmask(uint256 offset, uint256 width) internal pure returns (uint256) {
+        return ((uint256(1) << width) - 1) << offset;
+    }
+
+    // -------------------------------------------------------------------------
     // Core functions
     // -------------------------------------------------------------------------
 
     /// @notice Scan forward from `searchPointer` until a vacant slot is found, then write `packedValue`.
     /// @dev    Reverts with `VacancyFlagNotSet` if the vacancy flag bits in `packedValue` are all zero,
     ///         since the slot would appear vacant immediately after writing.
+    ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots from
+    ///         `searchPointer`. Use `findVacant` off-chain to compute a tight hint.
     /// @return index The slot index where `packedValue` was stored.
     function allocate(Pool storage pool, RecycleConfig cfg, uint256 searchPointer, uint256 packedValue)
         internal
@@ -134,9 +153,7 @@ library SlotRecyclingLib {
         // Verify vacancy flag is actually cleared.
         uint256 mask = vacancyMask(cfg);
         if (tombstone & mask != 0) {
-            // clearMask does not cover the vacancy flag bits; the slot would not scan as vacant.
-            // Write anyway but the caller's clearMask is misconfigured. Revert to be safe.
-            revert BadRecycleConfig(vacancyBitOffset(cfg), vacancyBitWidth(cfg));
+            revert ClearMaskIncomplete(clearMask);
         }
         pool._data[index] = tombstone;
     }
@@ -151,7 +168,7 @@ library SlotRecyclingLib {
     {
         if (sentinel == 0) revert TombstoneIsZero();
         uint256 mask = vacancyMask(cfg);
-        if (sentinel & mask != 0) revert VacancyFlagNotSet(sentinel);
+        if (sentinel & mask != 0) revert SentinelOccupied(sentinel);
         freedValue = pool._data[index];
         pool._data[index] = sentinel;
     }
@@ -162,6 +179,9 @@ library SlotRecyclingLib {
     }
 
     /// @notice Write a raw packed value at `index` without scanning for vacancy.
+    /// @dev    **Invariant bypass:** this function does not check vacancy or the vacancy flag.
+    ///         Writing zero or a value with vacancy bits unset will corrupt pool state.
+    ///         Use `allocate` for safe writes; use this only for advanced migration scenarios.
     function store(Pool storage pool, uint256 index, uint256 packedValue) internal {
         pool._data[index] = packedValue;
     }
@@ -174,6 +194,7 @@ library SlotRecyclingLib {
     /// @notice Find the next vacant slot starting from `searchPointer`.
     /// @dev    Intended for off-chain use (view). On-chain callers should use `allocate` which
     ///         combines scanning and writing in a single call.
+    ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots.
     function findVacant(Pool storage pool, RecycleConfig cfg, uint256 searchPointer)
         internal
         view

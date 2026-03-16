@@ -5,7 +5,11 @@ import {RecycleConfig, SlotRecyclingLib} from "../SlotRecyclingLib.sol";
 
 /// @title  RecycledArticleStore
 /// @notice Optimized contract: uses SlotRecyclingLib to recycle freed mapping slots.
-///         Same external API as RawArticleStore but saves ~17,100 gas per recycled allocation.
+///         Saves ~17,100 gas per recycled allocation vs RawArticleStore.
+/// @dev    Differs from the raw baseline: IDs are recycled slot indices (not monotonic),
+///         and reading a deleted slot returns stale tombstone data (not zeros).
+///         Production contracts should track a `_nextHint` state variable to avoid scanning
+///         from 0 on every allocation. This showcase omits hints to isolate the recycling benefit.
 contract RecycledArticleStore {
     /// @dev Article layout in a single 256-bit word:
     ///      bits   0-159 : owner (address, 160 bits)
@@ -19,7 +23,7 @@ contract RecycledArticleStore {
 
     /// @dev Clear mask: zeros bountyAmount (bits 192-247) and withdrawalPermittedAt (bits 160-191).
     ///      Leaves owner and category as tombstone.
-    uint256 private constant CLEAR_MASK = (((uint256(1) << 56) - 1) << 192) | (((uint256(1) << 32) - 1) << 160);
+    uint256 private immutable CLEAR_MASK = SlotRecyclingLib.bitmask(192, 56) | SlotRecyclingLib.bitmask(160, 32);
 
     event ArticleCreated(uint256 indexed id, address owner);
     event ArticleDeleted(uint256 indexed id);

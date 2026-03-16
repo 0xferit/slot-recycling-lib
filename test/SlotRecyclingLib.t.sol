@@ -7,7 +7,9 @@ import {
     SlotRecyclingLib,
     BadRecycleConfig,
     TombstoneIsZero,
-    VacancyFlagNotSet
+    VacancyFlagNotSet,
+    ClearMaskIncomplete,
+    SentinelOccupied
 } from "src/SlotRecyclingLib.sol";
 
 /// @notice Harness that exposes library functions via external calls for testing.
@@ -180,7 +182,7 @@ contract SlotRecyclingLibTest is Test {
         harness.allocate(cfg, 0, LIVE_VALUE);
         // clearMask that does NOT cover the vacancy flag bits
         uint256 badClearMask = (uint256(1) << 160) - 1; // only clears bits 0-159
-        vm.expectRevert(abi.encodeWithSelector(BadRecycleConfig.selector, 192, 56));
+        vm.expectRevert(abi.encodeWithSelector(ClearMaskIncomplete.selector, badClearMask));
         harness.free(cfg, 0, badClearMask);
     }
 
@@ -203,7 +205,7 @@ contract SlotRecyclingLibTest is Test {
 
     function test_freeWithSentinel_sentinelHasVacancyBits_reverts() public {
         harness.store(0, LIVE_VALUE);
-        vm.expectRevert(abi.encodeWithSelector(VacancyFlagNotSet.selector, LIVE_VALUE));
+        vm.expectRevert(abi.encodeWithSelector(SentinelOccupied.selector, LIVE_VALUE));
         harness.freeWithSentinel(cfg, 0, LIVE_VALUE); // vacancy bits set in sentinel
     }
 
@@ -239,6 +241,29 @@ contract SlotRecyclingLibTest is Test {
         harness.free(cfg, 0, CLEAR_MASK);
         // Slot 0 freed, should be found first.
         assertEq(harness.findVacant(cfg, 0), 0);
+    }
+
+    // ── Bitmask helper ──
+
+    function test_bitmask_correctComputation() public pure {
+        uint256 mask = SlotRecyclingLib.bitmask(192, 56);
+        uint256 expected = ((uint256(1) << 56) - 1) << 192;
+        assertEq(mask, expected);
+    }
+
+    function test_bitmask_composable() public pure {
+        uint256 combined = SlotRecyclingLib.bitmask(160, 32) | SlotRecyclingLib.bitmask(192, 56);
+        // Should cover bits 160-247
+        uint256 expected = ((uint256(1) << 88) - 1) << 160;
+        assertEq(combined, expected);
+    }
+
+    // ── Create edge cases ──
+
+    function test_create_hugeOffset_reverts() public {
+        // Would overflow offset + width in unchecked arithmetic; must revert with BadRecycleConfig
+        vm.expectRevert(abi.encodeWithSelector(BadRecycleConfig.selector, type(uint256).max - 7, 8));
+        harness.create(type(uint256).max - 7, 8);
     }
 
     // ── Fuzz tests ──
@@ -313,7 +338,7 @@ contract SlotRecyclingLibTest is Test {
             vm.expectRevert(TombstoneIsZero.selector);
             harness.free(fuzzCfg, 0, clearMask);
         } else if (!vacancyCleared) {
-            vm.expectRevert(abi.encodeWithSelector(BadRecycleConfig.selector, 192, 56));
+            vm.expectRevert(abi.encodeWithSelector(ClearMaskIncomplete.selector, clearMask));
             harness.free(fuzzCfg, 0, clearMask);
         } else {
             uint256 freed = harness.free(fuzzCfg, 0, clearMask);
