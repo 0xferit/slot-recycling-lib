@@ -7,7 +7,7 @@ EVM charges ~20,000 gas for a zero-to-nonzero SSTORE but only ~2,900 gas (warm) 
 ```solidity
 import {RecycleConfig, SlotRecyclingLib} from "slot-recycling-lib/src/SlotRecyclingLib.sol";
 
-// Vacancy flag: bountyAmount at bits 192-247 of the packed word.
+// Vacancy field spans bits 192-247 (56 bits) of the packed word.
 RecycleConfig private immutable CFG = SlotRecyclingLib.create(192, 56);
 SlotRecyclingLib.Pool private _pool;
 
@@ -101,8 +101,6 @@ Showcase contracts under `src/showcase/` compare:
 
 - `RawArticleStore`: standard mapping with `delete` on removal.
 - `RecycledArticleStore`: same API using `SlotRecyclingLib` for tombstoned recycling.
-
-Both use a TruthPost-style Article struct (owner + withdrawalPermittedAt + bountyAmount + category = 1 slot).
 
 ## License
 
