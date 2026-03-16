@@ -1,0 +1,66 @@
+name: Gas Badges
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  gas-badges:
+    name: Generate gas savings badges
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          cache: true
+
+      - name: Install dependencies
+        run: forge soldeer install
+
+      - name: Run showcase gas benchmark
+        run: |
+          set -o pipefail
+          forge test --match-path test/showcase/ShowcaseGas.t.sol -vv | tee gas_output.txt
+
+      - name: Generate badge endpoint JSON
+        run: |
+          set -euo pipefail
+
+          extract() { grep "$1" gas_output.txt | awk '{print $NF}'; }
+
+          recycling_bps=$(extract "recycling savings bps")
+
+          [[ "$recycling_bps" =~ ^[0-9]+$ ]] || { echo "Failed to parse: '$recycling_bps'"; exit 1; }
+
+          recycling_pct=$(awk -v bps="$recycling_bps" 'BEGIN { printf "%.1f", bps / 100 }')
+
+          mkdir -p .badges
+          cat > .badges/recycling-savings.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "slot recycling: gas savings",
+            "message": "${recycling_pct}%",
+            "color": "brightgreen"
+          }
+          EOF
+
+      - name: Push badge data to gh-badges branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf /tmp/gh-badges
+          mkdir -p /tmp/gh-badges/.badges
+          cp .badges/*.json /tmp/gh-badges/.badges/
+          cd /tmp/gh-badges
+
+          git init
+          git checkout --orphan gh-badges
+          git add .badges/*.json
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Update gas savings badges"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-badges:gh-badges

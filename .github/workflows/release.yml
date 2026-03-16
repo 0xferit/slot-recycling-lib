@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    outputs:
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install semantic-release and Claude Code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          npm install --no-save \
+            semantic-release \
+            @semantic-release/changelog \
+            @semantic-release/exec \
+            @semantic-release/git \
+            @semantic-release/github \
+            conventional-changelog-conventionalcommits
+
+      - name: Release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          BEFORE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          npx semantic-release
+          git fetch --tags
+          AFTER_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+          if [ "$BEFORE_TAG" != "$AFTER_TAG" ]; then
+            echo "new_release_published=true" >> $GITHUB_OUTPUT
+            echo "new_release_version=${AFTER_TAG#v}" >> $GITHUB_OUTPUT
+          else
+            echo "new_release_published=false" >> $GITHUB_OUTPUT
+          fi
+
+  soldeer-publish:
+    name: Publish to Soldeer
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new_release_version }}
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Publish to Soldeer registry
+        env:
+          SOLDEER_API_TOKEN: ${{ secrets.SOLDEER_API_TOKEN }}
+        run: |
+          if [ -z "$SOLDEER_API_TOKEN" ]; then
+            echo "::error::SOLDEER_API_TOKEN secret is not set"
+            exit 1
+          fi
+          VERSION=${{ needs.release.outputs.new_release_version }}
+          echo "Publishing slot-recycling-lib~$VERSION to Soldeer..."
+          forge soldeer push slot-recycling-lib~"$VERSION" --skip-warnings 2>&1 | tee /tmp/soldeer-output.log
+          if grep -q "error during" /tmp/soldeer-output.log; then
+            echo "::error::Soldeer push failed"
+            exit 1
+          fi
+
+      - name: Tag last Soldeer publish
+        run: |
+          git tag -f soldeer-published
+          git push origin soldeer-published --force

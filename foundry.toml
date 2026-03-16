@@ -1,0 +1,15 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["dependencies"]
+ast = true
+optimizer = true
+optimizer_runs = 0x10000
+
+[fuzz]
+runs = 0x10000
+
+[dependencies]
+forge-std = "1.14.0"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

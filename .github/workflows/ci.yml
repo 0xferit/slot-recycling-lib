@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          cache: true
+
+      - name: Cache Soldeer dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: soldeer-${{ hashFiles('soldeer.lock') }}
+
+      - name: Install dependencies
+        run: forge soldeer install
+
+      - name: Build
+        run: forge build
+
+      - name: Test
+        run: forge test -vvv

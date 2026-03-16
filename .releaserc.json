@@ -1,0 +1,31 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/exec",
+      {
+        "analyzeCommitsCmd": "bash scripts/analyze-bump.sh",
+        "prepareCmd": "sed -i 's/VERSION = \"[^\"]*\"/VERSION = \"${nextRelease.version}\"/' src/SlotRecyclingLib.sol"
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      { "preset": "conventionalcommits" }
+    ],
+    [
+      "@semantic-release/changelog",
+      { "changelogFile": "CHANGELOG.md" }
+    ],
+    [
+      "@semantic-release/github",
+      { "successComment": false }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["CHANGELOG.md", "src/SlotRecyclingLib.sol"],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ]
+  ]
+}
