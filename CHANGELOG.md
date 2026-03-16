@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.0...v1.0.1) (2026-03-16)
+
+### Features
+
+* invariant tests and byte-alignment documentation ([ff51a01](https://github.com/0xferit/slot-recycling-lib/commit/ff51a01b45c13de5372eae60431e585a2dd38441))
+
 ## 1.0.0 (2026-03-16)
 
 ### Features
