@@ -37,7 +37,7 @@ forge fmt                                                            # format So
 ### Tests: `test/`
 
 - `SlotRecyclingLib.t.sol`: `RecyclerHarness` exposes library via external calls. Smoke tests and fuzz tests.
-- `showcase/ShowcaseGas.t.sol`: gas benchmarks comparing raw vs recycled create-after-delete.
+- `showcase/ShowcaseGas.t.sol`: gas benchmarks comparing raw vs recycled create-after-delete. Enforces explicit gas budgets via `GAS_BUDGET_*` constants (see "Gas regression budgets" section below).
 
 ### Configuration
 
@@ -75,3 +75,28 @@ Fully automated on push to main (`.github/workflows/release.yml`):
 3. `@semantic-release/exec` bumps the `VERSION` constant in `SlotRecyclingLib.sol`.
 4. GitHub release created, CHANGELOG.md + source committed with `[skip ci]`.
 5. `forge soldeer push` publishes to the Soldeer registry, then tags `soldeer-published`.
+
+## Gas regression budgets
+
+`test/showcase/ShowcaseGas.t.sol` defines `GAS_BUDGET_*` constants that cap the gas for each key
+scenario. CI enforces these via `assertLe`. The budgets include ~20-40% headroom above observed
+values to absorb compiler and EVM variation without false positives.
+
+| Constant | Scenario | Budget |
+|---|---|---|
+| `GAS_BUDGET_FRESH_ALLOCATION` | First allocation (no reuse) | 35,000 |
+| `GAS_BUDGET_BEST_CASE` | Create-after-delete (zero scan) | 4,000 |
+| `GAS_BUDGET_REALISTIC_SCAN` | Create-after-delete (5 occupied slots scanned) | 5,500 |
+| `GAS_BUDGET_LIFECYCLE` | 20 creates + 10 deletes (50% reuse) | 400,000 |
+
+**Updating budgets** (when a deliberate change causes a budget to be exceeded):
+
+1. Run `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv` locally.
+2. Note the new observed values in the console output.
+3. Update the corresponding `GAS_BUDGET_*` constant with ~20% headroom above the new value.
+4. Update the "Current observed values" comment in the `ShowcaseGasTest` contract NatSpec.
+5. If README benchmarks are affected, update those numbers too.
+6. Commit with a message explaining the tradeoff (e.g., `perf: accept +X gas for Y`).
+
+The same test file feeds both CI (`forge test`) and the badge-generation workflow
+(`gas-badges.yml`), so they cannot silently diverge.
