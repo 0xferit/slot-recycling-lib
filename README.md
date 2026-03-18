@@ -132,7 +132,7 @@ The `clearMask` passed to `free` tells the library which bits to zero. The bits 
    // Leaves owner (bits 0-159) and category (bits 248-255) as tombstone.
    uint256 CLEAR_MASK = SlotRecyclingLib.bitmask(192, 56) | SlotRecyclingLib.bitmask(160, 32);
    ```
-4. **Choose a vacancy field that is always non-zero when occupied.** Good candidates: a non-zero token amount, a block timestamp (`block.timestamp` is always ≥ 1), or a non-zero-address owner. Avoid boolean fields (only 1 bit wide and not byte-aligned) or fields that can legitimately be zero.
+4. **Choose a vacancy field that your contract guarantees is non-zero when occupied.** Good candidates: a non-zero token amount, a timestamp field that your contract never leaves at zero for occupied entries, or a non-zero-address owner. Avoid boolean fields (only 1 bit wide and not byte-aligned) or fields that can legitimately be zero.
 
 See [`RecycledArticleStore.sol`](src/showcase/RecycledArticleStore.sol) for a complete working example, and [`RawArticleStore.sol`](src/showcase/RawArticleStore.sol) for the standard-mapping baseline it replaces.
 
