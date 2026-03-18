@@ -246,8 +246,6 @@ unaudited and review your own integration accordingly.
 Review materials:
 
 - [`SECURITY.md`](SECURITY.md)
-- [`docs/SECURITY-REVIEW-PACK.md`](docs/SECURITY-REVIEW-PACK.md)
-- [`docs/REVIEWER-CHECKLIST.md`](docs/REVIEWER-CHECKLIST.md)
 
 ## License
 

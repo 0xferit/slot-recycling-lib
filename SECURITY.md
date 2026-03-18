@@ -47,7 +47,20 @@ Out of scope unless tied to a concrete library bug:
 - There is currently **no bug bounty program**.
 - Backports are not guaranteed. Default targets are the latest release and `main`.
 
-## Review materials
+## For reviewers
 
-- [`docs/SECURITY-REVIEW-PACK.md`](docs/SECURITY-REVIEW-PACK.md)
-- [`docs/REVIEWER-CHECKLIST.md`](docs/REVIEWER-CHECKLIST.md)
+- Primary review target: [`src/SlotRecyclingLib.sol`](src/SlotRecyclingLib.sol)
+- Key semantics: recycled indices, tombstone reads, vacancy-mask-based emptiness
+- Main invariants:
+  - `create` rejects invalid configs
+  - `allocate` only writes values with non-zero vacancy bits
+  - `free` and `freeWithSentinel` leave slots vacant but non-zero
+  - `isVacant`, `findVacant`, and `allocate` use the same vacancy predicate
+  - `store` is intentionally unsafe and bypasses invariants
+- Useful evidence:
+  - [`test/compat/PublicApiCompat.t.sol`](test/compat/PublicApiCompat.t.sol)
+  - [`test/SlotRecyclingLib.t.sol`](test/SlotRecyclingLib.t.sol)
+  - [`test/SlotRecyclingLib.invariant.t.sol`](test/SlotRecyclingLib.invariant.t.sol)
+  - [`test/showcase/ShowcaseGas.t.sol`](test/showcase/ShowcaseGas.t.sol)
+  - [`test/showcase/ShowcaseHintTest.t.sol`](test/showcase/ShowcaseHintTest.t.sol)
+- Remaining maintainer action: obtain an independent review and publish the exact reviewed version/tag if one happens
