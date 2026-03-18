@@ -201,6 +201,27 @@ Showcase contracts under `src/showcase/` compare:
 
 - `RawArticleStore`: standard mapping with `delete` on removal.
 - `RecycledArticleStore`: same API using `SlotRecyclingLib` for tombstoned recycling.
+  Scans from 0 on every allocation to isolate the recycling benefit.
+- [`RecycledArticleStoreWithHint`](src/showcase/RecycledArticleStoreWithHint.sol): production-oriented
+  example with a `_nextHint` strategy that keeps scans tight. Shows the recommended pattern for
+  real integrations.
+
+### Hint strategy
+
+`RecycledArticleStoreWithHint` maintains a `_nextHint` state variable—the lowest index likely to be
+vacant:
+
+- **On allocate:** pass `_nextHint` as the search pointer; after allocation, set
+  `_nextHint = allocatedIndex + 1`.
+- **On free:** if the freed index is below `_nextHint`, move the hint down to the freed index.
+
+This simple policy gives O(1) scan cost when slots are freed and re-allocated in FIFO order, and
+degrades gracefully to a short linear scan when gaps are scattered. See the contract's NatSpec for
+tradeoff discussion. Run the benchmark:
+
+```bash
+forge test --match-path test/showcase/ShowcaseHintTest.t.sol -vv
+```
 
 ## Stability & Semver
 
