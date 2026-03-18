@@ -21,7 +21,7 @@ import {
     VacancyFlagNotSet,
     ClearMaskIncomplete,
     SentinelOccupied
-} from "src/SlotRecyclingLib.sol";
+} from "slot-recycling-lib/src/SlotRecyclingLib.sol";
 
 /// @notice Minimal consumer contract that mirrors the README quick-start pattern.
 ///         Its purpose is compile-time verification; the test below calls every
@@ -143,13 +143,12 @@ contract PublicApiCompatTest is Test {
         assertEq(idx, 0);
     }
 
-    // -- error selectors (compile-time check that errors exist) -----------
+    // -- error selectors (fixed ABI guard for name + params) --------------
     function test_compat_errorSelectors() public pure {
-        // Verify each error's selector is computable (confirms name + params).
-        assertTrue(BadRecycleConfig.selector != bytes4(0));
-        assertTrue(TombstoneIsZero.selector != bytes4(0));
-        assertTrue(VacancyFlagNotSet.selector != bytes4(0));
-        assertTrue(ClearMaskIncomplete.selector != bytes4(0));
-        assertTrue(SentinelOccupied.selector != bytes4(0));
+        assertEq(BadRecycleConfig.selector, bytes4(0xd1d32cf0));
+        assertEq(TombstoneIsZero.selector, bytes4(0xf1f5f699));
+        assertEq(VacancyFlagNotSet.selector, bytes4(0x7b4dcadd));
+        assertEq(ClearMaskIncomplete.selector, bytes4(0x3e8581c5));
+        assertEq(SentinelOccupied.selector, bytes4(0x668dc6e5));
     }
 }
