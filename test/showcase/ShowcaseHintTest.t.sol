@@ -226,8 +226,9 @@ contract ShowcaseHintTest is Test {
 
     /// @notice Compares hint-managed vs hint-less showcase in a churn scenario with scan overhead.
     /// @dev    Scenario: create 20 articles, delete the first 10, then create 10 more.
-    ///         Without hint: allocate always scans from 0, hitting 0-9 occupied slots before finding vacancies.
-    ///         With hint: allocate starts from _nextHint, skipping known-occupied slots.
+    ///         Without hint: each allocation scans from 0; after the first reuse fills slot 0 the
+    ///         next call must skip it to find slot 1, then skip 0-1 to find slot 2, etc.
+    ///         With hint: _nextHint advances after each reuse, so every call finds its slot immediately.
     function test_gasComparison_hintVsNoHint_churnScenario() public {
         RecycledArticleStore noHint = new RecycledArticleStore();
         RecycledArticleStoreWithHint withHint = new RecycledArticleStoreWithHint();
@@ -279,8 +280,8 @@ contract ShowcaseHintTest is Test {
 
     /// @notice Compares hint vs no-hint when deletions create scattered gaps far from index 0.
     /// @dev    Scenario: create 50 articles, delete every other one starting from index 30.
-    ///         No-hint must scan past 30 occupied slots to reach the first vacancy.
-    ///         Hint-managed jumps directly to the first freed slot.
+    ///         No-hint must scan past 30 occupied slots (indices 0-29) to reach the first vacancy
+    ///         at index 30. Hint-managed jumps directly to the first freed slot.
     function test_gasComparison_hintVsNoHint_scatteredHighGaps() public {
         RecycledArticleStore noHint = new RecycledArticleStore();
         RecycledArticleStoreWithHint withHint = new RecycledArticleStoreWithHint();
