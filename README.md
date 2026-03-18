@@ -82,6 +82,72 @@ SlotRecyclingLib.free(_pool, CFG, idx, CLEAR_MASK);
 // Next allocate reuses the freed slot at ~2,900 gas instead of ~20,000.
 ```
 
+## Before you integrate
+
+> **This library changes the observable semantics of a mapping-backed collection.**
+> Read this section before adopting it; the storage optimization is not free of tradeoffs.
+
+### Semantic differences from a normal mapping
+
+| Normal mapping | SlotRecyclingLib pool |
+|---|---|
+| Each new entry gets a fresh, never-before-used key | Slot indices are **reused**. A new allocation may return an index that previously belonged to a different logical item. |
+| `delete` zeroes the slot; reading it returns `0` / default | `free` / `freeWithSentinel` leave a **non-zero tombstone**. Reading a freed slot returns stale data, not zero. |
+| A zero read reliably means "does not exist" | A zero read only means the slot was **never written**. Freed slots read as the tombstone, not zero. |
+| IDs are inherently monotonic (e.g., `nextId++`) | Recycled indices are **not monotonic**. Do not use slot indices as externally visible unique IDs without an indirection layer. |
+
+**If your contract or off-chain indexer relies on any of the left-column behaviors, you must add your own bookkeeping.** Common mitigations:
+- Maintain a separate monotonic counter and map external IDs → slot indices.
+- Track existence with a `mapping(uint256 => bool)` or a bitmap alongside the pool.
+- Treat any read where `isVacant(pool, cfg, index)` returns `true` as "does not exist."
+
+### Operational footguns
+
+1. **Double-free is silently permitted.** `free` and `freeWithSentinel` do not check whether the slot is already vacant. Calling free twice on the same index succeeds as long as the resulting tombstone is non-zero. Guard against this in your own code if double-free would break your invariants.
+
+2. **`store` bypasses all invariants.** It performs a raw `SSTORE` with no vacancy check and no vacancy-flag validation. Writing zero or a value with vacant vacancy bits corrupts the pool — the slot will appear vacant while holding data, or vice versa. Use `store` only for migrations or administrative overrides, never in normal allocation paths.
+
+3. **Vacancy bits must be non-zero for every occupied value.** `allocate` enforces this, but if you construct packed values incorrectly the check will revert your transaction. Pick a field that is *guaranteed* non-zero whenever the slot is logically occupied (e.g., a non-zero amount, a non-zero timestamp, a non-zero address).
+
+4. **`delete` or any full-zero write defeats the optimization.** If any code path writes zero to a pool slot (Solidity `delete`, inline assembly `sstore(slot, 0)`), the next write to that slot will pay the full 20,000 gas zero-to-nonzero cost. Always use `free` or `freeWithSentinel` to clear slots.
+
+5. **Gas savings depend on reuse rate and hint quality.** If your workload rarely deletes, or the `searchPointer` hint is far from the next vacancy, the scan overhead can offset or exceed the savings. Benchmark with your actual access pattern (see [ShowcaseGas.t.sol](test/showcase/ShowcaseGas.t.sol)).
+
+### Choosing between `free` and `freeWithSentinel`
+
+| Use `free` when | Use `freeWithSentinel` when |
+|---|---|
+| At least one field naturally stays non-zero after clearing the vacancy field and other mutable data (e.g., an `address owner` field). | No remaining field is guaranteed non-zero, or you want a deterministic tombstone value across all slots. |
+| You want to preserve some original data as part of the tombstone (e.g., keep the owner address for historical queries). | You want a fixed, recognizable sentinel (e.g., `0x01`) that is trivial to filter out in off-chain indexing. |
+
+### Constructing a safe `clearMask`
+
+The `clearMask` passed to `free` tells the library which bits to zero. The bits that remain form the tombstone.
+
+1. **Always include the vacancy flag bits.** If the clear mask does not cover every vacancy-flag bit, `free` reverts with `ClearMaskIncomplete`.
+2. **Include all mutable data fields** you want to erase — but leave at least one non-zero field untouched so the tombstone is non-zero.
+3. **Build the mask with `SlotRecyclingLib.bitmask`** and compose ranges with bitwise OR:
+   ```solidity
+   // Clear bountyAmount (bits 192-247) and withdrawalPermittedAt (bits 160-191).
+   // Leaves owner (bits 0-159) and category (bits 248-255) as tombstone.
+   uint256 CLEAR_MASK = SlotRecyclingLib.bitmask(192, 56) | SlotRecyclingLib.bitmask(160, 32);
+   ```
+4. **Choose a vacancy field that your contract guarantees is non-zero when occupied.** Good candidates: a non-zero token amount, a timestamp field that your contract never leaves at zero for occupied entries, or a non-zero-address owner. Avoid boolean fields (only 1 bit wide and not byte-aligned) or fields that can legitimately be zero.
+
+See [`RecycledArticleStore.sol`](src/showcase/RecycledArticleStore.sol) for a complete working example, and [`RawArticleStore.sol`](src/showcase/RawArticleStore.sol) for the standard-mapping baseline it replaces.
+
+### When NOT to use this library
+
+Use this checklist to decide whether slot recycling fits your use case:
+
+- [ ] **Your mapping has meaningful churn** (entries are created and deleted regularly). If entries are append-only, there are no slots to recycle.
+- [ ] **You can identify a non-zero vacancy field** in your packed struct. If every field can legitimately be zero when occupied, tombstoning does not work cleanly.
+- [ ] **Your contract does not depend on zero-on-missing semantics.** If you rely on reading a deleted key as zero (e.g., for access-control checks like `require(balances[id] == 0)`), tombstone data will break that assumption.
+- [ ] **Slot indices are not used as external unique IDs** — or you have an indirection layer that maps stable external IDs to recycled internal indices.
+- [ ] **Off-chain indexers can handle non-zero reads on freed slots** or you have existence tracking that indexers can query.
+
+If any box stays unchecked, consider whether the integration cost outweighs the gas savings.
+
 ## Installation
 
 ```bash
@@ -156,6 +222,16 @@ tradeoff discussion. Run the benchmark:
 ```bash
 forge test --match-path test/showcase/ShowcaseHintTest.t.sol -vv
 ```
+
+## Stability & Semver
+
+The public API is frozen as of `1.0.0`. Breaking changes require a **major**
+version bump. See [`STABILITY.md`](STABILITY.md) for the full policy, including
+what counts as public API and how `major`/`minor`/`patch` are defined.
+
+A compile-time compatibility fixture (`test/compat/PublicApiCompat.t.sol`)
+exercises every supported import and call pattern. CI fails if the fixture
+stops compiling or its tests break.
 
 ## License
 

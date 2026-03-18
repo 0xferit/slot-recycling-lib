@@ -8,9 +8,50 @@ import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 /// @title  ShowcaseGasTest
 /// @notice Gas benchmarks comparing RawArticleStore (standard delete) vs RecycledArticleStore
 ///         (tombstoned slot recycling). All measurements happen within a single transaction,
-///         so storage accesses are warm. The recycled path uses searchPointer = 0 with only
-///         the freed slot in the pool, meaning zero scan iterations.
+///         so storage accesses are warm. Scenarios in this contract cover both best-case
+///         reuse (including a zero-scan create-after-delete case) and scan-heavy reuse paths.
+///
+/// @dev    **Gas regression budgets.**
+///         Each key scenario has an explicit gas budget enforced via `assertLe`. The budgets
+///         include ~20-40% headroom above observed values to absorb compiler/EVM variation
+///         without producing false positives. If a budget is exceeded, CI will fail.
+///
+///         Current observed values (Solc 0.8.25, optimizer runs = 0x10000):
+///           - Fresh allocation overhead (recycled):   ~29,200 gas
+///           - Best-case create-after-delete:          ~2,800 gas
+///           - Realistic scan (5 occupied slots):      ~3,900 gas
+///           - Lifecycle (20 creates, 10 deletes):     ~325,000 gas
+///
+///         **Updating budgets.** When a deliberate change causes gas to exceed a budget:
+///           1. Run `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv` locally.
+///           2. Note the new observed values in the console output.
+///           3. Update the corresponding `GAS_BUDGET_*` constant below with ~20% headroom.
+///           4. Update the "Current observed values" comment above.
+///           5. If README benchmarks are affected, update those numbers too.
+///           6. Commit with a message explaining the tradeoff (e.g., "perf: accept +X gas for Y").
 contract ShowcaseGasTest is Test {
+    // -------------------------------------------------------------------------
+    // Gas regression budgets (single source of truth)
+    // -------------------------------------------------------------------------
+    // Each constant caps the gas for its scenario. Values include ~20-40% slack
+    // above observed measurements to prevent flaky failures across environments.
+    // See the contract NatSpec above for how to update these after an intentional change.
+
+    /// @dev Fresh allocation via the recycled path (no prior delete, no reuse).
+    uint256 internal constant GAS_BUDGET_FRESH_ALLOCATION = 35_000;
+
+    /// @dev Maximum allowed fresh-allocation overhead versus the raw path.
+    uint256 internal constant GAS_BUDGET_FRESH_OVERHEAD = 500;
+
+    /// @dev Best-case create-after-delete: one create, one delete, one recycled create.
+    uint256 internal constant GAS_BUDGET_BEST_CASE = 4_000;
+
+    /// @dev Realistic scan: 10 articles, delete index 5, create with searchPointer=0 (5 slots scanned).
+    uint256 internal constant GAS_BUDGET_REALISTIC_SCAN = 5_500;
+
+    /// @dev Lifecycle: 20 creates + 10 deletes with 50% reuse (total recycled-path gas).
+    uint256 internal constant GAS_BUDGET_LIFECYCLE = 400_000;
+
     RawArticleStore raw;
     RecycledArticleStore recycled;
 
@@ -43,12 +84,13 @@ contract ShowcaseGasTest is Test {
 
         console.log("raw create-after-delete gas:     ", rawCreateAfterDelete);
         console.log("recycled create-after-delete gas: ", recycledCreateAfterDelete);
+        assertTrue(recycledCreateAfterDelete < rawCreateAfterDelete, "recycled should be cheaper");
         console.log("savings gas:                      ", rawCreateAfterDelete - recycledCreateAfterDelete);
 
         uint256 savingsBps = ((rawCreateAfterDelete - recycledCreateAfterDelete) * 10000) / rawCreateAfterDelete;
         console.log("recycling savings bps:            ", savingsBps);
 
-        assertTrue(recycledCreateAfterDelete < rawCreateAfterDelete, "recycled should be cheaper");
+        assertLe(recycledCreateAfterDelete, GAS_BUDGET_BEST_CASE, "best-case gas budget exceeded");
     }
 
     /// @notice Realistic scenario: pool has occupied slots, freed slot is not at the front.
@@ -78,12 +120,13 @@ contract ShowcaseGasTest is Test {
 
         console.log("realistic raw gas:      ", rawGas);
         console.log("realistic recycled gas:  ", recycledGas);
+        assertTrue(recycledGas < rawGas, "recycled should still be cheaper with scan overhead");
         console.log("realistic savings gas:   ", rawGas - recycledGas);
 
         uint256 savingsBps = ((rawGas - recycledGas) * 10000) / rawGas;
         console.log("realistic savings bps:   ", savingsBps);
 
-        assertTrue(recycledGas < rawGas, "recycled should still be cheaper with scan overhead");
+        assertLe(recycledGas, GAS_BUDGET_REALISTIC_SCAN, "realistic scan gas budget exceeded");
     }
 
     /// @notice Lifecycle benchmark: 20 creates and 10 deletes interleaved over time.
@@ -160,17 +203,18 @@ contract ShowcaseGasTest is Test {
         console.log("  recycled creates (reuse):  10");
         console.log("  raw total gas:             ", rawTotal);
         console.log("  recycled total gas:        ", recycledTotal);
+        assertTrue(recycledTotal < rawTotal, "recycled should be cheaper over full lifecycle");
         console.log("  total savings gas:         ", rawTotal - recycledTotal);
 
         uint256 savingsBps = ((rawTotal - recycledTotal) * 10000) / rawTotal;
         console.log("  lifecycle savings bps:     ", savingsBps);
 
-        assertTrue(recycledTotal < rawTotal, "recycled should be cheaper over full lifecycle");
+        assertLe(recycledTotal, GAS_BUDGET_LIFECYCLE, "lifecycle gas budget exceeded");
     }
 
     /// @notice Measures gas for first-time creation (no prior delete, no recycling benefit).
-    /// @dev    Both paths write to a fresh zero slot, so the SSTORE cost is the same.
-    ///         This test confirms the library does not add meaningful overhead on the non-recycling path.
+    /// @dev    Both paths write to a fresh zero slot, so neither gets a recycling benefit.
+    ///         This test bounds the recycled path's overhead relative to the raw path on fresh allocation.
     function test_gasComparison_freshAllocation() public {
         uint256 gasBefore = gasleft();
         raw.createArticle(100, 1);
@@ -183,6 +227,9 @@ contract ShowcaseGasTest is Test {
         console.log("raw fresh allocation gas:      ", rawFresh);
         console.log("recycled fresh allocation gas:  ", recycledFresh);
 
-        // Fresh allocation should be comparable (no recycling benefit yet)
+        assertLe(
+            recycledFresh, rawFresh + GAS_BUDGET_FRESH_OVERHEAD, "fresh allocation overhead should stay within budget"
+        );
+        assertLe(recycledFresh, GAS_BUDGET_FRESH_ALLOCATION, "fresh allocation gas budget exceeded");
     }
 }
