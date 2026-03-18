@@ -32,3 +32,60 @@ jobs:
 
       - name: Test
         run: forge test -vvv
+
+  kontrol:
+    name: Kontrol Formal Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          cache: true
+
+      - name: Cache Soldeer dependencies
+        uses: actions/cache@v5
+        with:
+          path: dependencies
+          key: soldeer-${{ hashFiles('soldeer.lock') }}
+
+      - name: Install dependencies
+        run: forge soldeer install
+
+      - name: Add swap space
+        run: |
+          sudo swapoff /swapfile || true
+          sudo rm -f /swapfile
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Run Kontrol proofs
+        env:
+          KONTROL_IMAGE: runtimeverificationinc/kontrol:ubuntu-jammy-1.0.231
+        run: |
+          mkdir -p .kontrol out cache
+          chmod 755 .kontrol out cache
+          docker run --rm \
+            --user root \
+            -e "HOST_UID=$(id -u)" \
+            -e "HOST_GID=$(id -g)" \
+            -e "PYTHONPATH=/home/user/.local/lib/python3.10/site-packages" \
+            -e "XDG_CACHE_HOME=/home/user/.cache" \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            "${KONTROL_IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              trap "chown -R ${HOST_UID}:${HOST_GID} .kontrol out cache || true" EXIT
+              rm -f /home/user/.local/lib/python3.10/site-packages/typing.py
+              kontrol build --verbose --config-file kontrol.toml --config-profile ci
+              kontrol prove --verbose --config-file kontrol.toml --config-profile ci \
+                --reinit \
+                --match-test "ProofSlotRecyclingSolidity.prove_.*_reverts"
+            '
