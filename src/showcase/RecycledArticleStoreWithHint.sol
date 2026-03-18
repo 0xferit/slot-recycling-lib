@@ -17,8 +17,8 @@ import {RecycleConfig, SlotRecyclingLib} from "../SlotRecyclingLib.sol";
 ///
 ///         • On **free**: if the freed index is below `_nextHint`, we move `_nextHint` down to
 ///           the freed index so the next allocation finds it immediately (zero scan iterations).
-///           If the freed index is at or above `_nextHint`, the hint is already at or below a
-///           vacancy, so we leave it unchanged.
+///           If the freed index is at or above `_nextHint`, we leave the hint unchanged because
+///           lowering it would not help the allocator reach that newly freed higher slot sooner.
 ///
 ///         **Tradeoffs:**
 ///         - This strategy is greedy: it always reuses the lowest available slot. Allocations
