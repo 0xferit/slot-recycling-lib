@@ -233,6 +233,22 @@ A compile-time compatibility fixture (`test/compat/PublicApiCompat.t.sol`)
 exercises every supported import and call pattern. CI fails if the fixture
 stops compiling or its tests break.
 
+## Review status
+
+This library is currently **unaudited**. The maintainer is open to an
+independent security review, including a pro bono or discounted review if an
+auditor is interested in supporting public-good infrastructure, but no such
+review has been commissioned or completed yet.
+
+Until an external review artifact is published, treat this library as
+unaudited and review your own integration accordingly.
+
+Review materials:
+
+- [`SECURITY.md`](SECURITY.md)
+- [`docs/SECURITY-REVIEW-PACK.md`](docs/SECURITY-REVIEW-PACK.md)
+- [`docs/REVIEWER-CHECKLIST.md`](docs/REVIEWER-CHECKLIST.md)
+
 ## License
 
 MIT (see SPDX headers in source files).
