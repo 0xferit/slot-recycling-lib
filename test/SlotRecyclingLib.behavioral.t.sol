@@ -26,6 +26,12 @@ contract BehavioralPoolHandler is Test {
     uint256[] public occupiedList;
     uint256 public occupiedCount;
 
+    /// @dev Which indices have been written at least once.
+    mapping(uint256 => bool) public everWritten;
+
+    /// @dev Compact list of all indices ever written.
+    uint256[] public writtenList;
+
     /// @dev Highest index ever written + 1. Bounds the invariant inspection window.
     uint256 public highWaterMark;
 
@@ -100,6 +106,10 @@ contract BehavioralPoolHandler is Test {
         occupied[actual] = true;
         occupiedList.push(actual);
         occupiedCount++;
+        if (!everWritten[actual]) {
+            everWritten[actual] = true;
+            writtenList.push(actual);
+        }
         if (actual + 1 > highWaterMark) highWaterMark = actual + 1;
     }
 
@@ -155,6 +165,10 @@ contract BehavioralPoolHandler is Test {
 
     function getOccupiedList() external view returns (uint256[] memory) {
         return occupiedList;
+    }
+
+    function getWrittenList() external view returns (uint256[] memory) {
+        return writtenList;
     }
 }
 
@@ -238,11 +252,11 @@ contract SlotRecyclingBehavioralTest is Test {
 
     function _checkFreedSlots(BehavioralPoolHandler handler) internal view {
         uint256 mask = handler.VACANCY_MASK();
-        uint256 hwm = handler.highWaterMark();
-        for (uint256 i = 0; i < hwm; i++) {
-            uint256 raw = handler.rawLoad(i);
-            if (raw == 0) continue; // Never written; skip.
-            if (handler.occupied(i)) {
+        uint256[] memory list = handler.getWrittenList();
+        for (uint256 i = 0; i < list.length; i++) {
+            uint256 index = list[i];
+            uint256 raw = handler.rawLoad(index);
+            if (handler.occupied(index)) {
                 assertTrue(raw & mask != 0, "occupied slot missing vacancy bits");
             } else {
                 assertTrue(raw != 0, "freed slot is zero (tombstone lost)");

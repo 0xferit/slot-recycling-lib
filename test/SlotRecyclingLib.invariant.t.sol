@@ -81,14 +81,15 @@ contract SlotRecyclingInvariantTest is Test {
     }
 
     /// @notice Every freed slot must be non-zero (tombstone preserved).
-    /// @dev    Checks all indices up to the high-water mark. If a slot is not in the occupied set
-    ///         and has been written to (raw != 0), the tombstone must have vacancy bits == 0.
+    /// @dev    Because allocate always scans from 0 in this handler, every index below the
+    ///         high-water mark has been written at least once. A zero value there means the
+    ///         tombstone was lost.
     function invariant_freedSlotsAreNonZeroWithVacancyClear() public view {
         uint256 mask = handler.VACANCY_MASK();
         uint256 hwm = handler.highWaterMark();
         for (uint256 i = 0; i < hwm; i++) {
             uint256 raw = handler.rawLoad(i);
-            if (raw == 0) continue; // Never written; skip.
+            assertTrue(raw != 0, "slot below high-water mark is zero");
             if (handler.occupied(i)) {
                 // Occupied: vacancy bits must be set.
                 assertTrue(raw & mask != 0, "occupied slot missing vacancy bits");
