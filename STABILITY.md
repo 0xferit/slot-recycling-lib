@@ -1,8 +1,9 @@
 # Stability & Semver Policy
 
 This library follows [Semantic Versioning 2.0.0](https://semver.org/) with the
-definitions below. Since version `1.0.0` has been published, all breaking changes
-to the public API require a **major** version bump.
+definitions below. Breaking changes to the documented public API require a
+**major** version bump; backward-compatible additions are **minor** releases,
+and fixes or internal-only changes are **patch** releases.
 
 ## What counts as public API
 

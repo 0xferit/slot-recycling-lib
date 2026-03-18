@@ -225,9 +225,11 @@ forge test --match-path test/showcase/ShowcaseHintTest.t.sol -vv
 
 ## Stability & Semver
 
-The public API is frozen as of `1.0.0`. Breaking changes require a **major**
-version bump. See [`STABILITY.md`](STABILITY.md) for the full policy, including
-what counts as public API and how `major`/`minor`/`patch` are defined.
+This library follows [Semantic Versioning 2.0.0](https://semver.org/).
+Breaking changes to the documented public API require a **major** version
+bump; backward-compatible additions are **minor** releases, and fixes or
+internal-only changes are **patch** releases. See [`STABILITY.md`](STABILITY.md)
+for the full policy, including what counts as public API.
 
 A compile-time compatibility fixture (`test/compat/PublicApiCompat.t.sol`)
 exercises every supported import and call pattern. CI fails if the fixture
