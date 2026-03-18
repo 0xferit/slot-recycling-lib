@@ -16,6 +16,7 @@ contract PoolHandler {
     mapping(uint256 => bool) public occupied;
     uint256[] public occupiedList;
     uint256 public occupiedCount;
+    uint256 public highWaterMark; // max index ever written + 1
 
     /// @notice Allocate a slot with a random-ish packed value.
     function doAllocate(uint56 bountyAmount, uint8 category) external {
@@ -26,6 +27,7 @@ contract PoolHandler {
         occupied[idx] = true;
         occupiedList.push(idx);
         occupiedCount++;
+        if (idx + 1 > highWaterMark) highWaterMark = idx + 1;
     }
 
     /// @notice Free the N-th occupied slot (modular index into occupiedList).
@@ -79,14 +81,12 @@ contract SlotRecyclingInvariantTest is Test {
     }
 
     /// @notice Every freed slot must be non-zero (tombstone preserved).
-    /// @dev    Checks a window of indices: if a slot is not in the occupied set and has been
-    ///         written to (raw != 0), the tombstone must have vacancy bits == 0.
+    /// @dev    Checks all indices up to the high-water mark. If a slot is not in the occupied set
+    ///         and has been written to (raw != 0), the tombstone must have vacancy bits == 0.
     function invariant_freedSlotsAreNonZeroWithVacancyClear() public view {
         uint256 mask = handler.VACANCY_MASK();
-        // Check indices 0..occupiedCount+5 (covers allocated and freed range).
-        uint256 checkRange = handler.occupiedCount() + 6;
-        if (checkRange > 50) checkRange = 50;
-        for (uint256 i = 0; i < checkRange; i++) {
+        uint256 hwm = handler.highWaterMark();
+        for (uint256 i = 0; i < hwm; i++) {
             uint256 raw = handler.rawLoad(i);
             if (raw == 0) continue; // Never written; skip.
             if (handler.occupied(i)) {
