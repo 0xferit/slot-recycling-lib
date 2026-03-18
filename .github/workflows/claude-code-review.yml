@@ -14,18 +14,94 @@ jobs:
       id-token: write
 
     steps:
+      - name: Check Claude review prerequisites
+        id: prereqs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_IS_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          PR_AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          should_run=true
+          reasons=()
+
+          if [[ "$PR_IS_DRAFT" == "true" ]]; then
+            should_run=false
+            reasons+=("PR is still in draft state")
+          fi
+
+          if [[ "$PR_AUTHOR_TYPE" != "User" ]]; then
+            should_run=false
+            reasons+=("PR author type is '$PR_AUTHOR_TYPE'; bot-authored PRs cannot obtain the write-capable app token this workflow needs")
+          fi
+
+          case "$PR_AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              ;;
+            *)
+              should_run=false
+              reasons+=("PR author association is '$PR_AUTHOR_ASSOCIATION'; this workflow only runs for authors with repository write access")
+              ;;
+          esac
+
+          if [[ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then
+            should_run=false
+            reasons+=("CLAUDE_CODE_OAUTH_TOKEN secret is not configured for this repository")
+          fi
+
+          pr_files=$(
+            curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100"
+          )
+
+          if jq -e '.[] | select(.filename == ".github/workflows/claude-code-review.yml")' >/dev/null <<<"$pr_files"; then
+            should_run=false
+            reasons+=("PR modifies .github/workflows/claude-code-review.yml; Claude's app-token exchange rejects review runs until the default branch contains the same workflow content")
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
+          if [[ "$should_run" == "true" ]]; then
+            echo "::notice::Claude review prerequisites satisfied."
+            exit 0
+          fi
+
+          {
+            echo "skip_reason<<EOF"
+            printf '%s\n' "${reasons[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          printf '::notice::Skipping Claude review because:\n'
+          printf '::notice:: - %s\n' "${reasons[@]}"
+
       - name: Checkout repository
+        if: steps.prereqs.outputs.should_run == 'true'
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Run Claude Code Review
         id: claude-review
+        if: steps.prereqs.outputs.should_run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--model opus --effort high'
+          claude_args: '--model opus --effort max'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          allowed_bots: 'claude'
+
+      - name: Report skipped Claude review
+        if: steps.prereqs.outputs.should_run != 'true'
+        run: |
+          echo "Claude review was skipped."
+          echo
+          echo "${{ steps.prereqs.outputs.skip_reason }}"
