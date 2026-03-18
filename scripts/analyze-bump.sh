@@ -30,11 +30,20 @@ COMMIT_LOG=$(git log "$BASE"..HEAD --pretty=format:"- %s" 2>/dev/null || echo "-
 DIFF_STAT=$(git diff "$BASE"..HEAD --stat 2>/dev/null | tail -30 || echo "no diff")
 
 PROMPT="You are a semantic versioning expert for a Solidity library (slot-recycling-lib).
+The public API is frozen post-1.0.0 per STABILITY.md. The frozen public API surface is:
+
+  Frozen surface (any change here → major):
+  - RecycleConfig user-defined value type and its uint256 underlying type
+  - SlotRecyclingLib.Pool struct
+  - File-level errors: BadRecycleConfig, TombstoneIsZero, VacancyFlagNotSet, ClearMaskIncomplete, SentinelOccupied (names, parameter types, parameter order)
+  - Library function signatures: create, vacancyMask, bitmask, allocate, free, freeWithSentinel, load, store, isVacant, findVacant
+  - Global using directive: using SlotRecyclingLib for RecycleConfig global
+  - Canonical import path: slot-recycling-lib/src/SlotRecyclingLib.sol
 
 Rules:
-- major: breaking changes to the consumer-facing API (renamed functions, changed signatures, renamed/removed errors, changed type definitions)
-- minor: new features (new functions, new error types, new capabilities)
-- patch: bug fixes, internal refactoring, performance improvements
+- major: ANY change to the frozen public API surface above (renamed/removed functions, changed signatures, renamed/removed errors, changed type definitions, changed import path)
+- minor: new features that do not break existing consumers (new functions, new error types, new helper types)
+- patch: bug fixes, internal refactoring, performance improvements, documentation, tooling
 
 Respond with exactly one word: major, minor, or patch.
 

@@ -136,6 +136,16 @@ Showcase contracts under `src/showcase/` compare:
 - `RawArticleStore`: standard mapping with `delete` on removal.
 - `RecycledArticleStore`: same API using `SlotRecyclingLib` for tombstoned recycling.
 
+## Stability & Semver
+
+The public API is frozen as of `1.0.0`. Breaking changes require a **major**
+version bump. See [`STABILITY.md`](STABILITY.md) for the full policy, including
+what counts as public API and how `major`/`minor`/`patch` are defined.
+
+A compile-time compatibility fixture (`test/compat/PublicApiCompat.t.sol`)
+exercises every supported import and call pattern. CI fails if the fixture
+stops compiling or its tests break.
+
 ## License
 
 MIT (see SPDX headers in source files).
