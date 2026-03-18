@@ -1,0 +1,92 @@
+[build.default]
+foundry-project-root = "."
+regen = false
+rekompile = false
+verbose = false
+debug = false
+o2 = true
+
+[build.ci]
+foundry-project-root = "."
+regen = false
+rekompile = false
+verbose = false
+debug = false
+o2 = false
+
+[build.local]
+foundry-project-root = "."
+regen = false
+rekompile = false
+verbose = false
+debug = false
+o2 = true
+
+[prove.default]
+foundry-project-root = "."
+verbose = false
+debug = false
+max-depth = 25000
+workers = 4
+failure-information = true
+counterexample-information = true
+fail-fast = true
+smt-timeout = 1000
+run-constructor = true
+no-stack-checks = true
+
+[prove.ci]
+foundry-project-root = "."
+verbose = false
+debug = false
+max-depth = 25000
+workers = 8
+use-booster = false
+failure-information = true
+counterexample-information = true
+fail-fast = true
+smt-timeout = 1000
+run-constructor = true
+no-stack-checks = true
+
+[prove.local]
+foundry-project-root = "."
+verbose = false
+debug = false
+max-depth = 25000
+workers = 4
+use-booster = false
+failure-information = true
+counterexample-information = true
+fail-fast = true
+smt-timeout = 1000
+run-constructor = true
+no-stack-checks = true
+
+[prove.local-hi]
+foundry-project-root = "."
+verbose = false
+debug = false
+max-depth = 25000
+workers = 8
+max-frontier-parallel = 8
+use-booster = false
+failure-information = true
+counterexample-information = true
+fail-fast = true
+smt-timeout = 1000
+run-constructor = true
+no-stack-checks = true
+
+[show.default]
+foundry-project-root = "."
+verbose = false
+debug = false
+use-hex-encoding = false
+
+[view-kcfg.default]
+foundry-project-root = "."
+use-hex-encoding = false
+omit-code-cells = true
+omit-interim-cells = true
+omit-cost-cells = true
