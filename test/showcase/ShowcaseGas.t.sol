@@ -16,7 +16,7 @@ import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 ///         include ~20-40% headroom above observed values to absorb compiler/EVM variation
 ///         without producing false positives. If a budget is exceeded, CI will fail.
 ///
-///         Current observed values (Solc 0.8.25, optimizer runs = 0x10000):
+///         Current observed values (Solc 0.8.25, Foundry v1.5.1, optimizer runs = 0x10000):
 ///           - Fresh allocation overhead (recycled):   ~29,200 gas
 ///           - Best-case create-after-delete:          ~2,800 gas
 ///           - Realistic scan (5 occupied slots):      ~3,900 gas
@@ -29,6 +29,14 @@ import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 ///           4. Update the "Current observed values" comment above.
 ///           5. If README benchmarks are affected, update those numbers too.
 ///           6. Commit with a message explaining the tradeoff (e.g., "perf: accept +X gas for Y").
+///
+///         **Upgrading the toolchain.** When bumping Solc or Foundry pins:
+///           1. Update `solc_version` in `foundry.toml` and/or the Foundry `version` in all
+///              GitHub Actions workflows (`ci.yml`, `gas-badges.yml`, `release.yml`).
+///           2. Rerun `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv`.
+///           3. Refresh `GAS_BUDGET_*` constants and the "Current observed values" comment if needed.
+///           4. Update README benchmark numbers if they changed.
+///           5. Ship all changes in a single PR.
 contract ShowcaseGasTest is Test {
     // -------------------------------------------------------------------------
     // Gas regression budgets (single source of truth)
