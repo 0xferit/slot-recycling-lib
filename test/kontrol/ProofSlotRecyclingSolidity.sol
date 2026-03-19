@@ -24,9 +24,6 @@ import {ProofAssumptions} from "test/kontrol/ProofAssumptions.sol";
 contract ProofSlotRecyclingSolidity is ProofAssumptions {
     SlotRecyclingLib.Pool internal _pool;
 
-    // Canonical 192/56 config set in constructor (immutable).
-    RecycleConfig internal immutable _cfg;
-
     // Concrete live value: owner=0xdead (bits 0-159), bounty=42 (bits 192-247), category=1 (bit 248).
     uint256 internal constant OWNER_BITS = uint256(uint160(0xdead));
     uint256 internal constant BOUNTY_BITS = uint256(42) << 192;
@@ -37,22 +34,22 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
     uint256 internal constant CLEAR_MASK =
         (((uint256(1) << 56) - 1) << 192) | (((uint256(1) << 32) - 1) << 160);
 
-    constructor() {
-        _cfg = SlotRecyclingLib.create(192, 56);
+    function _canonicalConfig() internal pure returns (RecycleConfig) {
+        return SlotRecyclingLib.create(192, 56);
     }
 
     // ── External wrappers (for revert capture via low-level call) ──
 
     function _doAllocate(uint256 searchPointer, uint256 packedValue) external {
-        SlotRecyclingLib.allocate(_pool, _cfg, searchPointer, packedValue);
+        SlotRecyclingLib.allocate(_pool, _canonicalConfig(), searchPointer, packedValue);
     }
 
     function _doFree(uint256 index, uint256 clearMask) external {
-        SlotRecyclingLib.free(_pool, _cfg, index, clearMask);
+        SlotRecyclingLib.free(_pool, _canonicalConfig(), index, clearMask);
     }
 
     function _doFreeWithSentinel(uint256 index, uint256 sentinel) external {
-        SlotRecyclingLib.freeWithSentinel(_pool, _cfg, index, sentinel);
+        SlotRecyclingLib.freeWithSentinel(_pool, _canonicalConfig(), index, sentinel);
     }
 
     // ── Helper ──
@@ -81,10 +78,10 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
 
     /// @notice allocate reuses a just-freed slot when searchPointer starts at that slot (concrete).
     function prove_allocate_reuses_freed_slot() public {
-        uint256 idx = SlotRecyclingLib.allocate(_pool, _cfg, 0, LIVE_VALUE);
+        uint256 idx = SlotRecyclingLib.allocate(_pool, _canonicalConfig(), 0, LIVE_VALUE);
         assertEq(idx, 0);
-        SlotRecyclingLib.free(_pool, _cfg, 0, CLEAR_MASK);
-        uint256 idx2 = SlotRecyclingLib.allocate(_pool, _cfg, 0, LIVE_VALUE);
+        SlotRecyclingLib.free(_pool, _canonicalConfig(), 0, CLEAR_MASK);
+        uint256 idx2 = SlotRecyclingLib.allocate(_pool, _canonicalConfig(), 0, LIVE_VALUE);
         assertEq(idx2, 0);
     }
 
@@ -104,8 +101,8 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
 
     /// @notice free writes a non-zero tombstone with vacancy bits cleared on success (concrete).
     function prove_free_writesNonZeroTombstoneWithVacancyCleared() public {
-        SlotRecyclingLib.allocate(_pool, _cfg, 0, LIVE_VALUE);
-        SlotRecyclingLib.free(_pool, _cfg, 0, CLEAR_MASK);
+        SlotRecyclingLib.allocate(_pool, _canonicalConfig(), 0, LIVE_VALUE);
+        SlotRecyclingLib.free(_pool, _canonicalConfig(), 0, CLEAR_MASK);
         uint256 raw = SlotRecyclingLib.load(_pool, 0);
         assertTrue(raw != 0);
         assertEq(raw & _VACANCY_MASK, 0);
@@ -123,11 +120,11 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
         _assertCustomErrorSelector(returndata, TombstoneIsZero.selector);
     }
 
-    /// @notice freeWithSentinel reverts with SentinelOccupied when sentinel has vacancy bits set.
-    function prove_freeWithSentinel_occupiedSentinel_reverts(uint256 index, uint256 sentinel) public {
-        _assumeSentinelOccupied(sentinel);
+    /// @notice freeWithSentinel reverts with SentinelOccupied for a sentinel with bit 192 set.
+    function prove_freeWithSentinel_occupiedSentinel_reverts(uint256 index) public {
+        uint256 occupiedSentinel = uint256(1) << 192;
         (bool success, bytes memory returndata) =
-            address(this).call(abi.encodeCall(this._doFreeWithSentinel, (index, sentinel)));
+            address(this).call(abi.encodeCall(this._doFreeWithSentinel, (index, occupiedSentinel)));
         assertFalse(success);
         _assertCustomErrorSelector(returndata, SentinelOccupied.selector);
     }
@@ -136,7 +133,7 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
     function prove_freeWithSentinel_writesNonZeroSentinelWithVacancyCleared(uint256 sentinel) public {
         _assumeValidSentinel(sentinel);
         SlotRecyclingLib.store(_pool, 0, LIVE_VALUE);
-        SlotRecyclingLib.freeWithSentinel(_pool, _cfg, 0, sentinel);
+        SlotRecyclingLib.freeWithSentinel(_pool, _canonicalConfig(), 0, sentinel);
         uint256 raw = SlotRecyclingLib.load(_pool, 0);
         assertEq(raw, sentinel);
         assertTrue(raw != 0);
@@ -149,15 +146,15 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
 
     /// @notice findVacant returns slot 0 when the pool is fresh (concrete).
     function prove_findVacant_freshPool_returnsZero() public view {
-        uint256 idx = SlotRecyclingLib.findVacant(_pool, _cfg, 0);
+        uint256 idx = SlotRecyclingLib.findVacant(_pool, _canonicalConfig(), 0);
         assertEq(idx, 0);
     }
 
     /// @notice findVacant returns the freed slot when searching from that slot (concrete).
     function prove_findVacant_finds_freed_slot() public {
-        SlotRecyclingLib.allocate(_pool, _cfg, 0, LIVE_VALUE);
-        SlotRecyclingLib.free(_pool, _cfg, 0, CLEAR_MASK);
-        uint256 idx = SlotRecyclingLib.findVacant(_pool, _cfg, 0);
+        SlotRecyclingLib.allocate(_pool, _canonicalConfig(), 0, LIVE_VALUE);
+        SlotRecyclingLib.free(_pool, _canonicalConfig(), 0, CLEAR_MASK);
+        uint256 idx = SlotRecyclingLib.findVacant(_pool, _canonicalConfig(), 0);
         assertEq(idx, 0);
     }
 }
