@@ -6,7 +6,6 @@ import {
     SlotRecyclingLib,
     TombstoneIsZero,
     VacancyFlagNotSet,
-    ClearMaskIncomplete,
     SentinelOccupied
 } from "src/SlotRecyclingLib.sol";
 import {ProofAssumptions} from "test/kontrol/ProofAssumptions.sol";
@@ -27,9 +26,6 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
 
     // Canonical 192/56 config set in constructor (immutable).
     RecycleConfig internal immutable _cfg;
-
-    // Vacancy mask: bits 192-247 (56 bits). Same as _VACANCY_MASK in ProofAssumptions.
-    uint256 internal constant VACANCY_MASK = ((uint256(1) << 56) - 1) << 192;
 
     // Concrete live value: owner=0xdead (bits 0-159), bounty=42 (bits 192-247), category=1 (bit 248).
     uint256 internal constant OWNER_BITS = uint256(uint160(0xdead));
@@ -112,7 +108,7 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
         SlotRecyclingLib.free(_pool, _cfg, 0, CLEAR_MASK);
         uint256 raw = SlotRecyclingLib.load(_pool, 0);
         assertTrue(raw != 0);
-        assertEq(raw & VACANCY_MASK, 0);
+        assertEq(raw & _VACANCY_MASK, 0);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -144,7 +140,7 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
         uint256 raw = SlotRecyclingLib.load(_pool, 0);
         assertEq(raw, sentinel);
         assertTrue(raw != 0);
-        assertEq(raw & VACANCY_MASK, 0);
+        assertEq(raw & _VACANCY_MASK, 0);
     }
 
     // ────────────────────────────────────────────────────────────────
