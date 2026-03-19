@@ -9,7 +9,8 @@ import {
     TombstoneIsZero,
     VacancyFlagNotSet,
     ClearMaskIncomplete,
-    SentinelOccupied
+    SentinelOccupied,
+    BadBitmask
 } from "src/SlotRecyclingLib.sol";
 
 /// @notice Harness that exposes library functions via external calls for testing.
@@ -53,6 +54,10 @@ contract RecyclerHarness {
 
     function findVacant(RecycleConfig cfg, uint256 searchPointer) external view returns (uint256 index) {
         return SlotRecyclingLib.findVacant(_pool, cfg, searchPointer);
+    }
+
+    function bitmask(uint256 offset, uint256 width) external pure returns (uint256) {
+        return SlotRecyclingLib.bitmask(offset, width);
     }
 }
 
@@ -274,6 +279,49 @@ contract SlotRecyclingLibTest is Test {
         // Should cover bits 160-247
         uint256 expected = ((uint256(1) << 88) - 1) << 160;
         assertEq(combined, expected);
+    }
+
+    function test_bitmask_widthZero_returnsZero() public pure {
+        assertEq(SlotRecyclingLib.bitmask(0, 0), 0);
+        assertEq(SlotRecyclingLib.bitmask(128, 0), 0);
+        assertEq(SlotRecyclingLib.bitmask(256, 0), 0);
+    }
+
+    function test_bitmask_widthFull_returnsMax() public pure {
+        assertEq(SlotRecyclingLib.bitmask(0, 256), type(uint256).max);
+    }
+
+    function test_bitmask_offsetPlusWidthEquals256() public pure {
+        // Boundary: offset + width == 256 is valid
+        uint256 mask = SlotRecyclingLib.bitmask(248, 8);
+        uint256 expected = uint256(0xFF) << 248;
+        assertEq(mask, expected);
+    }
+
+    function test_bitmask_offsetPlusWidthExceeds256_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, 248, 16));
+        harness.bitmask(248, 16);
+    }
+
+    function test_bitmask_widthExceeds256_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, 0, 257));
+        harness.bitmask(0, 257);
+    }
+
+    function test_bitmask_offsetExceeds256_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, 257, 0));
+        harness.bitmask(257, 0);
+    }
+
+    function test_bitmask_hugeInputs_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, type(uint256).max, 1));
+        harness.bitmask(type(uint256).max, 1);
+
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, 1, type(uint256).max));
+        harness.bitmask(1, type(uint256).max);
+
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, type(uint256).max, type(uint256).max));
+        harness.bitmask(type(uint256).max, type(uint256).max);
     }
 
     // ── Create edge cases ──
