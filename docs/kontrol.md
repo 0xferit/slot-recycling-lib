@@ -25,7 +25,16 @@ All proofs use the canonical `192/56` vacancy range (showcase-style config).
 
 ## Prerequisites
 
-Docker daemon running locally (`docker info`).
+Native Kontrol and Foundry installations available on `PATH`.
+
+Example Apple Silicon install for Kontrol:
+
+```bash
+APPLE_SILICON=true UV_PYTHON=3.10 kup install kontrol --version v1.0.231
+```
+
+The helper script uses the native `kontrol` binary. Docker is only used in CI, where the image is
+pinned in `.github/workflows/ci.yml`.
 
 ## Commands
 
@@ -41,13 +50,6 @@ Docker daemon running locally (`docker info`).
 
 # Remove local proof artifacts
 ./script/kontrol.sh clean
-```
-
-Alternative Docker image (override):
-
-```bash
-KONTROL_DOCKER_IMAGE=runtimeverificationinc/kontrol:ubuntu-jammy-1.0.231 \
-  ./script/kontrol.sh prove-core
 ```
 
 ## Artifacts
