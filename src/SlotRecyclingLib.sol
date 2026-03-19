@@ -46,6 +46,9 @@ error ClearMaskIncomplete(uint256 clearMask);
 /// @notice Thrown by `freeWithSentinel` when the sentinel has vacancy flag bits set.
 error SentinelOccupied(uint256 sentinel);
 
+/// @notice Thrown by `bitmask` when the (offset, width) pair is out of range.
+error BadBitmask(uint256 offset, uint256 width);
+
 library SlotRecyclingLib {
     string internal constant VERSION = "1.0.10";
 
@@ -89,9 +92,27 @@ library SlotRecyclingLib {
     // -------------------------------------------------------------------------
 
     /// @notice Returns a bitmask with `width` bits set starting at `offset`.
-    /// @dev    Convenience for building clearMask arguments. Compose multiple ranges with OR:
-    ///         `bitmask(160, 32) | bitmask(192, 56)` clears bits 160-247.
+    /// @dev    Generic range helper for building `clearMask` arguments. Compose multiple ranges
+    ///         with OR: `bitmask(160, 32) | bitmask(192, 56)` clears bits 160-247.
+    ///
+    ///         **Input contract:**
+    ///         - `offset` must be ≤ 256.
+    ///         - `width` must be ≤ 256.
+    ///         - `offset + width` must be ≤ 256.
+    ///         - `width == 0` returns 0.
+    ///         - `width == 256` (which requires `offset == 0`) returns `type(uint256).max`.
+    ///         - All other invalid inputs revert with `BadBitmask`.
+    ///
+    ///         **Difference from `create()`:** `create()` is intentionally stricter — it enforces
+    ///         byte-alignment and an 8..248 width range for vacancy configs. `bitmask()` is a
+    ///         generic helper with no alignment constraints, suitable for building `clearMask`
+    ///         arguments that cover arbitrary bit ranges within a 256-bit word.
     function bitmask(uint256 offset, uint256 width) internal pure returns (uint256) {
+        if (offset > 256 || width > 256 || offset + width > 256) {
+            revert BadBitmask(offset, width);
+        }
+        if (width == 256) return type(uint256).max;
+        if (width == 0) return 0;
         return ((uint256(1) << width) - 1) << offset;
     }
 
