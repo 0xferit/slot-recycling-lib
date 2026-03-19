@@ -45,6 +45,9 @@ pinned in `.github/workflows/ci.yml`.
 # Prove core (revert-condition) Solidity specs
 ./script/kontrol.sh prove-core
 
+# Prove core specs with higher local parallelism (local-hi profile)
+./script/kontrol.sh prove-core-hi
+
 # Prove all Solidity specs
 ./script/kontrol.sh prove-core-full
 
