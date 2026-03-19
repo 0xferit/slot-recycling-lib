@@ -31,6 +31,8 @@ Post-London (EIP-2929 + EIP-3529):
 ### Benchmarks
 
 All benchmarks come from `ShowcaseGas.t.sol` and run within a single transaction (warm storage).
+Results below were measured with Solc 0.8.25, Foundry v1.5.1, optimizer runs = 0x10000.
+The compiler and Foundry release are pinned in `foundry.toml` and the CI workflows respectively.
 
 **Lifecycle: 20 creates, 10 deletes (50% reuse rate)**
 

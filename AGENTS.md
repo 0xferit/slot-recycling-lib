@@ -41,7 +41,7 @@ forge fmt                                                            # format So
 
 ### Configuration
 
-- `foundry.toml`: optimizer runs = 0x10000, fuzz runs = 0x10000, deps via Soldeer.
+- `foundry.toml`: optimizer runs = 0x10000, fuzz runs = 0x10000, deps via Soldeer. Pins `solc_version` for reproducible builds.
 - `remappings.txt`: maps `forge-std/` from `dependencies/`.
 
 ## Conventions
@@ -100,3 +100,22 @@ values to absorb compiler and EVM variation without false positives.
 
 The same test file feeds both CI (`forge test`) and the badge-generation workflow
 (`gas-badges.yml`), so they cannot silently diverge.
+
+## Pinned toolchain
+
+The repo pins both the Solidity compiler and the Foundry release so that gas benchmarks,
+regression budgets, and badge values are reproducible across local and CI environments.
+
+- **Solc version**: set via `solc_version` in `foundry.toml`. This is the source of truth for
+  the compiler used by both local and CI builds.
+- **Foundry release**: set via the `version` input of `foundry-rs/foundry-toolchain@v1` in every
+  GitHub Actions workflow that runs `forge` (`ci.yml`, `gas-badges.yml`, `release.yml`). All
+  three workflows must use the same version.
+
+**Upgrading the toolchain.** When intentionally bumping Solc or Foundry, do it in one dedicated PR:
+
+1. Update `solc_version` in `foundry.toml` and/or the Foundry `version` in all workflows.
+2. Run `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv` locally.
+3. Refresh `GAS_BUDGET_*` constants and the "Current observed values" comment in `ShowcaseGas.t.sol` if needed.
+4. Update README benchmark numbers if they changed.
+5. Ship all changes together in the same PR.

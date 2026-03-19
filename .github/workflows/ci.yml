@@ -16,6 +16,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
+          version: v1.5.1
           cache: true
 
       - name: Cache Soldeer dependencies
@@ -45,6 +46,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
+          version: v1.5.1
           cache: true
 
       - name: Cache Soldeer dependencies
