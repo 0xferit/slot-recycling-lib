@@ -174,9 +174,9 @@ fall on byte boundaries. Sub-byte vacancy flags (e.g., a single bool bit) are no
 
 | Function | Description |
 |---|---|
-| `SlotRecyclingLib.create(offset, width)` | Creates a `RecycleConfig`. Reverts with `BadRecycleConfig` on invalid parameters. |
+| `SlotRecyclingLib.create(offset, width)` | Creates a `RecycleConfig`. Byte-aligned, width 8..248. Reverts with `BadRecycleConfig` on invalid parameters. |
 | `cfg.vacancyMask()` | Returns the precomputed vacancy mask. |
-| `SlotRecyclingLib.bitmask(offset, width)` | Returns a mask with `width` bits set at `offset`. Compose with OR for clearMask arguments. |
+| `SlotRecyclingLib.bitmask(offset, width)` | Generic range helper: returns a mask with `width` bits set at `offset`. Requires `offset + width ≤ 256`. Supports `width == 0` (returns 0) and `width == 256` (returns `type(uint256).max`). Reverts with `BadBitmask` on out-of-range inputs. Compose with OR for clearMask arguments. |
 | `allocate(pool, cfg, searchPointer, packedValue)` | Scan from hint, write to first vacant slot. Reverts if vacancy bits in value are zero. |
 | `free(pool, cfg, index, clearMask)` | Clear bits via mask, leave tombstone. Reverts if tombstone would be zero. |
 | `freeWithSentinel(pool, cfg, index, sentinel)` | Write fixed sentinel as tombstone. For cases where no field naturally stays non-zero. |
@@ -184,6 +184,11 @@ fall on byte boundaries. Sub-byte vacancy flags (e.g., a single bool bit) are no
 | `store(pool, index, packedValue)` | Raw write (no vacancy scan). |
 | `isVacant(pool, cfg, index)` | True if vacancy flag bits are all zero. |
 | `findVacant(pool, cfg, searchPointer)` | Scan for next vacant slot (view, for off-chain hints). |
+
+> **`create()` vs `bitmask()`:** `create()` is intentionally stricter than `bitmask()` — it enforces
+> byte-alignment (multiples of 8) and a width range of 8..248 for vacancy configs. `bitmask()` is a
+> generic helper with no alignment constraints, suitable for building `clearMask` arguments that cover
+> arbitrary bit ranges within a 256-bit word.
 
 ### Errors
 
@@ -193,6 +198,7 @@ error TombstoneIsZero();
 error VacancyFlagNotSet(uint256 packedValue);
 error ClearMaskIncomplete(uint256 clearMask);
 error SentinelOccupied(uint256 sentinel);
+error BadBitmask(uint256 offset, uint256 width);
 ```
 
 ## Showcase

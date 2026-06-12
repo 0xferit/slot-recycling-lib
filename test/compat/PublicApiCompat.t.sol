@@ -20,7 +20,8 @@ import {
     TombstoneIsZero,
     VacancyFlagNotSet,
     ClearMaskIncomplete,
-    SentinelOccupied
+    SentinelOccupied,
+    BadBitmask
 } from "slot-recycling-lib/src/SlotRecyclingLib.sol";
 
 /// @notice Minimal consumer contract that mirrors the README quick-start pattern.
@@ -150,5 +151,6 @@ contract PublicApiCompatTest is Test {
         assertEq(VacancyFlagNotSet.selector, bytes4(0x7b4dcadd));
         assertEq(ClearMaskIncomplete.selector, bytes4(0x3e8581c5));
         assertEq(SentinelOccupied.selector, bytes4(0x668dc6e5));
+        assertEq(BadBitmask.selector, bytes4(0xd4734043));
     }
 }

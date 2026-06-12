@@ -11,7 +11,7 @@ and fixes or internal-only changes are **patch** releases.
 |---|---|
 | **User-defined value type** | `RecycleConfig` and its underlying `uint256` type |
 | **Struct definitions** | `SlotRecyclingLib.Pool` |
-| **File-level errors** | `BadRecycleConfig`, `TombstoneIsZero`, `VacancyFlagNotSet`, `ClearMaskIncomplete`, `SentinelOccupied` — names, parameter types, and parameter order |
+| **File-level errors** | `BadRecycleConfig`, `TombstoneIsZero`, `VacancyFlagNotSet`, `ClearMaskIncomplete`, `SentinelOccupied`, `BadBitmask` — names, parameter types, and parameter order |
 | **Library function signatures** | Every `internal` function in `SlotRecyclingLib` — name, parameter types/order, return types |
 | **Global using directive** | `using SlotRecyclingLib for RecycleConfig global` |
 | **Import path** | `import {RecycleConfig, SlotRecyclingLib} from "slot-recycling-lib/src/SlotRecyclingLib.sol"` |
