@@ -1,3 +1,15 @@
+## [1.1.0](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.10...v1.1.0) (2026-06-12)
+
+### Features
+
+* add behavioral state model invariant tests with reference model ([ba65ce4](https://github.com/0xferit/slot-recycling-lib/commit/ba65ce4a63edcf59a0791f5c2a2d1ef6d3671fc9))
+* add Kontrol formal verification pilot for SlotRecyclingLib ([4bdfa5f](https://github.com/0xferit/slot-recycling-lib/commit/4bdfa5f9d7bfd8e88024f2d467c77a75a1de104c))
+* define and enforce input contract for SlotRecyclingLib.bitmask ([#20](https://github.com/0xferit/slot-recycling-lib/issues/20)) ([7136428](https://github.com/0xferit/slot-recycling-lib/commit/713642807e824b2b9681c3eec7878f9166948741))
+
+### Bug Fixes
+
+* stabilize occupied sentinel kontrol proof ([1b168b8](https://github.com/0xferit/slot-recycling-lib/commit/1b168b813708f0f41bec30f9d03b8477213ca48e))
+
 ## [1.0.10](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.9...v1.0.10) (2026-03-18)
 
 ## [1.0.9](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.8...v1.0.9) (2026-03-16)
