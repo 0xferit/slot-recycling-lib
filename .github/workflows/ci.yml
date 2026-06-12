@@ -10,16 +10,19 @@ jobs:
   test:
     name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
         with:
+          version: v1.5.1
           cache: true
 
       - name: Cache Soldeer dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: dependencies
           key: soldeer-${{ hashFiles('soldeer.lock') }}
@@ -40,15 +43,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
         with:
+          version: v1.5.1
           cache: true
 
       - name: Cache Soldeer dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: dependencies
           key: soldeer-${{ hashFiles('soldeer.lock') }}
@@ -67,7 +71,7 @@ jobs:
 
       - name: Run Kontrol proofs
         env:
-          KONTROL_IMAGE: runtimeverificationinc/kontrol:ubuntu-jammy-1.0.231
+          KONTROL_IMAGE: runtimeverificationinc/kontrol:ubuntu-jammy-1.0.231@sha256:e1cb5da4e62712ded9056664f628db5a8d187394d81491d6ac562f579e02a79c
         run: |
           mkdir -p .kontrol out cache
           chmod 755 .kontrol out cache

@@ -19,26 +19,28 @@ jobs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 'lts/*'
 
       - name: Install semantic-release and Claude Code
         run: |
-          npm install -g @anthropic-ai/claude-code
-          npm install --no-save \
-            semantic-release \
-            @semantic-release/changelog \
-            @semantic-release/exec \
-            @semantic-release/git \
-            @semantic-release/github \
-            conventional-changelog-conventionalcommits
+          # claude-code: postinstall fetches its native binary, so no --ignore-scripts;
+          # the exact version pin fixes the script content instead.
+          npm install -g @anthropic-ai/claude-code@2.1.156
+          npm install --no-save --ignore-scripts \
+            semantic-release@25.0.3 \
+            @semantic-release/changelog@6.0.3 \
+            @semantic-release/exec@7.1.0 \
+            @semantic-release/git@10.0.1 \
+            @semantic-release/github@12.0.8 \
+            conventional-changelog-conventionalcommits@9.3.1
 
       - name: Release
         id: semantic
@@ -64,12 +66,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           ref: v${{ needs.release.outputs.new_release_version }}
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+        with:
+          version: v1.5.1
 
       - name: Publish to Soldeer registry
         env:
