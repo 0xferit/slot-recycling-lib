@@ -291,6 +291,13 @@ contract SlotRecyclingLibTest is Test {
         assertEq(SlotRecyclingLib.bitmask(0, 256), type(uint256).max);
     }
 
+    function test_bitmask_widthFullNonzeroOffset_reverts() public {
+        // Boundary: width == 256 is valid only at offset 0 (sum == 257 is the
+        // minimal violation of offset + width <= 256)
+        vm.expectRevert(abi.encodeWithSelector(BadBitmask.selector, 1, 256));
+        harness.bitmask(1, 256);
+    }
+
     function test_bitmask_offsetPlusWidthEquals256() public pure {
         // Boundary: offset + width == 256 is valid
         uint256 mask = SlotRecyclingLib.bitmask(248, 8);
