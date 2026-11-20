@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: forge soldeer install
 
-      - name: Run showcase gas benchmark
+      - name: Measure batched Cancun gross gas
         run: |
           set -o pipefail
           forge test --match-path test/showcase/ShowcaseGas.t.sol -vv | tee gas_output.txt
@@ -47,7 +47,7 @@ jobs:
           cat > .badges/recycling-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "lifecycle (50% reuse): gas saved",
+            "label": "Cancun batched lifecycle gross gas saved",
             "message": "${lifecycle_pct}%",
             "color": "brightgreen"
           }
@@ -56,7 +56,7 @@ jobs:
           cat > .badges/bestcase-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "per recycled write: gas saved",
+            "label": "Cancun batched recreate gross gas saved",
             "message": "${bestcase_pct}%",
             "color": "brightgreen"
           }

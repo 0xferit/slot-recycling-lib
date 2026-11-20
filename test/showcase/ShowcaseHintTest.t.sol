@@ -6,7 +6,8 @@ import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 import {RecycledArticleStoreWithHint} from "src/showcase/RecycledArticleStoreWithHint.sol";
 
 /// @title  ShowcaseHintTest
-/// @notice Behavioral tests and gas benchmark for the hint-managed showcase.
+/// @notice Behavioral tests and batched Cancun gas benchmarks for the hint-managed fixture.
+/// @dev Gas measurements cover the recreate calls in one transaction, before settlement refunds.
 contract ShowcaseHintTest is Test {
     RecycledArticleStoreWithHint hint;
 
@@ -43,7 +44,7 @@ contract ShowcaseHintTest is Test {
         uint256 id = hint.createArticle(100, 1);
         hint.deleteArticle(id);
 
-        (, , uint56 bounty, ) = hint.readArticle(id);
+        (,, uint56 bounty,) = hint.readArticle(id);
         assertEq(bounty, 0, "bountyAmount should be zero after delete");
     }
 
@@ -57,7 +58,7 @@ contract ShowcaseHintTest is Test {
         uint256 second = hint.createArticle(200, 2);
         assertEq(second, first, "should reuse the freed slot");
 
-        (, , uint56 bounty, uint8 cat) = hint.readArticle(second);
+        (,, uint56 bounty, uint8 cat) = hint.readArticle(second);
         assertEq(bounty, 200);
         assertEq(cat, 2);
     }

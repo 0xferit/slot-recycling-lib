@@ -2,50 +2,28 @@
 pragma solidity ^0.8.25;
 
 import {RecycleConfig, SlotRecyclingLib} from "../SlotRecyclingLib.sol";
+import {
+    WITHDRAWAL_OFFSET,
+    BOUNTY_OFFSET,
+    CATEGORY_OFFSET,
+    articleRecycleConfig,
+    articleClearMask
+} from "./ArticleLayout.sol";
 
-/// @title  RecycledArticleStoreWithHint
-/// @notice Production-oriented showcase: uses SlotRecyclingLib with a `_nextHint` strategy
-///         to keep vacancy scans tight.
-///
-/// @dev    **Hint strategy (simple backward-on-free):**
-///
-///         `_nextHint` tracks the lowest index likely to be vacant.
-///
-///         • On **allocate**: the library scans from `_nextHint` and returns the index it wrote to.
-///           We set `_nextHint = allocatedIndex + 1` so the next allocation starts right after the
-///           slot just filled—no wasted re-scanning of known-occupied slots.
-///
-///         • On **free**: if the freed index is below `_nextHint`, we move `_nextHint` down to
-///           the freed index so the next allocation finds it immediately (zero scan iterations).
-///           If the freed index is at or above `_nextHint`, we leave the hint unchanged because
-///           lowering it would not help the allocator reach that newly freed higher slot sooner.
-///
-///         **Tradeoffs:**
-///         - This strategy is greedy: it always reuses the lowest available slot. Allocations
-///           cluster toward the bottom of the index space, which keeps scans short.
-///         - If many slots are freed above `_nextHint`, only the lowest one pulls the hint down.
-///           The others are still reachable—they just require scanning past the lower vacancy first.
-///         - The hint is never wrong in a safety sense: `allocate` will always find a vacant slot
-///           even if the hint points to an occupied one. A stale hint only costs extra scan gas.
-///
-///         This contract is otherwise identical to `RecycledArticleStore` and uses the same
-///         bit-packing layout.
+/// @title RecycledArticleStoreWithHint
+/// @notice Gas fixture that keeps a persistent hint for scanning vacant article slots.
+/// @dev Every index below the hint is occupied. On create the hint advances past the chosen slot.
+///      A deletion below the hint moves it back to that vacancy. The next scan can still cross an
+///      arbitrarily long occupied span between vacancies.
+///      Deletion is unrestricted. Deleting an existing tombstone emits another deletion event.
+///      Deleting a never-written slot reverts. Reads expose tombstone data until reuse.
+///      Article identifiers are recycled slot indices.
 contract RecycledArticleStoreWithHint {
-    /// @dev Article layout in a single 256-bit word:
-    ///      bits   0-159 : owner (address, 160 bits)
-    ///      bits 160-191 : withdrawalPermittedAt (uint32)
-    ///      bits 192-247 : bountyAmount (uint56) <-- vacancy flag
-    ///      bits 248-255 : category (uint8)
     SlotRecyclingLib.Pool private _pool;
 
-    /// @dev Vacancy flag: bountyAmount at bits 192-247.
-    RecycleConfig private immutable CFG = SlotRecyclingLib.create(192, 56);
+    RecycleConfig private immutable CFG = articleRecycleConfig();
+    uint256 private immutable CLEAR_MASK = articleClearMask();
 
-    /// @dev Clear mask: zeros bountyAmount (bits 192-247) and withdrawalPermittedAt (bits 160-191).
-    ///      Leaves owner and category as tombstone.
-    uint256 private immutable CLEAR_MASK = SlotRecyclingLib.bitmask(192, 56) | SlotRecyclingLib.bitmask(160, 32);
-
-    /// @dev Lowest index likely to be vacant. Updated on allocate and free.
     uint256 private _nextHint;
 
     event ArticleCreated(uint256 indexed id, address owner);
@@ -53,7 +31,8 @@ contract RecycledArticleStoreWithHint {
 
     function createArticle(uint56 _bountyAmount, uint8 _category) external returns (uint256 id) {
         require(_bountyAmount > 0, "bounty required");
-        uint256 packed = uint256(uint160(msg.sender)) | (uint256(_bountyAmount) << 192) | (uint256(_category) << 248);
+        uint256 packed = uint256(uint160(msg.sender)) | (uint256(_bountyAmount) << BOUNTY_OFFSET)
+            | (uint256(_category) << CATEGORY_OFFSET);
 
         id = SlotRecyclingLib.allocate(_pool, CFG, _nextHint, packed);
         _nextHint = id + 1;
@@ -75,9 +54,9 @@ contract RecycledArticleStoreWithHint {
     {
         uint256 raw = SlotRecyclingLib.load(_pool, _id);
         owner = address(uint160(raw));
-        withdrawalPermittedAt = uint32(raw >> 160);
-        bountyAmount = uint56(raw >> 192);
-        category = uint8(raw >> 248);
+        withdrawalPermittedAt = uint32(raw >> WITHDRAWAL_OFFSET);
+        bountyAmount = uint56(raw >> BOUNTY_OFFSET);
+        category = uint8(raw >> CATEGORY_OFFSET);
     }
 
     /// @notice Returns the current hint value (for off-chain monitoring or testing).

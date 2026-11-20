@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-/// @title  RawArticleStore
-/// @notice Baseline contract: standard mapping with full-zero deletion.
-///         Used as the control case for gas benchmarks against RecycledArticleStore.
+/// @title RawArticleStore
+/// @notice Gas control that assigns a fresh identifier on create and zeroes the article on delete.
+/// @dev Deletion is unrestricted and succeeds for missing or previously deleted identifiers.
 contract RawArticleStore {
     struct Article {
         address owner;
