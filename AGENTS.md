@@ -47,4 +47,4 @@ The batched Cancun tests own their gas ceilings. When a deliberate change exceed
 
 ## Pinned toolchain
 
-`foundry.toml` pins the Solidity compiler, Ethereum Virtual Machine target and optimizer settings. The GitHub workflows pin Foundry. When upgrading the toolchain, align the workflow versions and rerun the showcase gas benchmarks before updating affected figures or budgets.
+`foundry.toml` pins the Solidity compiler, Ethereum Virtual Machine target and optimizer settings. The GitHub workflows install Forge from the release archive pinned by version and checksum in [scripts/install-ci-forge.sh](scripts/install-ci-forge.sh). When upgrading the toolchain, update the pin and rerun the showcase gas benchmarks before updating affected figures or budgets.
