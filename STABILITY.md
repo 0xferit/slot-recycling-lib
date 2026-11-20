@@ -20,7 +20,7 @@ and fixes or internal-only changes are **patch** releases.
 ## What is NOT public API
 
 - Internal constants such as `VERSION` (informational, may change on any release).
-- Showcase contracts under `src/showcase/` (reference implementations, not importable API).
+- Unrestricted gas benchmark fixtures under `src/showcase/`.
 - Test files and scripts.
 - Gas costs (these may vary with compiler version and optimizer settings).
 

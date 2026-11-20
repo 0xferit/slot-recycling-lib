@@ -8,7 +8,7 @@ The vacancy field describes occupancy. Logical deletion keeps a nonzero word so 
 
 ## Measurements and verification
 
-The three article stores share a record layout. They compare full deletion and sequential allocation with slot recycling, either scanning from zero or maintaining a hint. They expose unrestricted calls so the benchmarks measure those storage and bookkeeping choices. Foundry tests measure gross call costs within a transaction. [Showcases](src/showcase/)
+The three article stores share a record layout. They compare full deletion and sequential allocation with slot recycling, either scanning from zero or maintaining a hint. They expose unrestricted calls so the benchmarks measure those storage and bookkeeping choices. Foundry tests measure gross call costs within a transaction. The receipt benchmark deploys fresh fixtures and measures the gas settled when each operation has its own transaction. [Showcases](src/showcase/) · [Gas measurements](docs/gas.md)
 
 The compatibility fixture exercises the supported consumer interface. Stateful Foundry tests compare the pool to a model across sequences of writes. Kontrol proves selected properties with a fixed vacancy field. The proof guide identifies the subset run in continuous integration and the scope of the search proofs. [Compatibility fixture](test/compat/PublicApiCompat.t.sol) · [Behavioral tests](test/SlotRecyclingLib.behavioral.t.sol) · [Proof guide](docs/kontrol.md)
 
