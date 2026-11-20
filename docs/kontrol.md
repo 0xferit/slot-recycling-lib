@@ -16,8 +16,13 @@ width 56. [Proof specifications](../test/kontrol/ProofSlotRecyclingSolidity.sol)
 - The two concrete `findVacant` scenarios start at index zero in a fresh pool and after freeing that
   slot. Each starts at an immediate vacancy.
 
-Continuous integration runs the four rejection specifications. The full local run also includes the
-five success scenarios.
+Continuous integration runs the four rejection specifications when the inputs differ from a successful
+push build on main. Documentation, benchmark reporting and the review workflow can reuse a verified
+ancestor. Solidity edits remain proof inputs because Kontrol reads NatSpec constraints. Changes to compiler inputs, dependencies, proof settings or the hosted proof workflow run the prover.
+When adding a new proof input, include it in the selector. A missing baseline also runs the prover. The Foundry build and test suite run on every pull request and push to main.
+[Input selection](../scripts/kontrol-inputs-match.sh) · [CI workflow](../.github/workflows/ci.yml)
+
+The full local run also includes the five success scenarios.
 
 ## Prerequisites
 
