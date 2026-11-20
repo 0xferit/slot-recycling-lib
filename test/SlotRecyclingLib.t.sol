@@ -278,10 +278,11 @@ contract SlotRecyclingLibTest is Test {
         uint256 lastIndex = type(uint256).max;
         assertEq(harness.allocate(cfg, lastIndex, LIVE_VALUE), lastIndex);
 
+        uint256 wrappedValue = OWNER_BITS | BOUNTY_BITS;
         assertEq(harness.findVacant(cfg, lastIndex), 0);
-        assertEq(harness.allocate(cfg, lastIndex, LIVE_VALUE), 0);
+        assertEq(harness.allocate(cfg, lastIndex, wrappedValue), 0);
         assertEq(harness.load(lastIndex), LIVE_VALUE);
-        assertEq(harness.load(0), LIVE_VALUE);
+        assertEq(harness.load(0), wrappedValue);
     }
 
     // ── Bitmask helper ──
