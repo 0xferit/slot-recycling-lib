@@ -7,8 +7,9 @@ pragma solidity ^0.8.25;
  * @custom:security-contact ferit@cryptolab.net
  * @notice Library for recycling freed mapping slots to avoid zero-to-nonzero SSTORE costs.
  *
- *         When a warm storage slot still holds its transaction-start value, writing a different
- *         non-zero value costs 20,000 gas for a zero slot and 2,900 gas for a non-zero slot.
+ *         Under Cancun gas rules, when a warm storage slot still holds its transaction-start value,
+ *         writing a different non-zero value costs 20,000 gas for a zero slot and 2,900 gas for a
+ *         non-zero slot.
  *         A non-zero "tombstone" on deletion keeps a freed slot cheaper to reuse across transactions.
  *
  *         The `RecycleConfig` value type wraps a precomputed `uint256` vacancy mask. The mask has
@@ -124,9 +125,8 @@ library SlotRecyclingLib {
     /// @notice Write `packedValue` to the first vacant slot in the cyclic scan used by `findVacant`.
     /// @dev    Reverts with `VacancyFlagNotSet` if the vacancy flag bits in `packedValue` are all zero,
     ///         since the slot would appear vacant immediately after writing.
-    ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots from
-    ///         `searchPointer`. Each slot scanned adds one storage read plus loop overhead (~100 gas
-    ///         warm, ~2,100 gas cold). Use `findVacant` off-chain to compute a hint for the current state.
+    ///         **Gas warning:** scan cost grows with the contiguous run of occupied slots.
+    ///         Use `findVacant` off-chain to compute a hint for the current state.
     /// @return index The slot index where `packedValue` was stored.
     function allocate(Pool storage pool, RecycleConfig cfg, uint256 searchPointer, uint256 packedValue)
         internal
@@ -207,8 +207,8 @@ library SlotRecyclingLib {
     /// @dev    Intended for off-chain use (view). On-chain callers should use `allocate` which
     ///         combines scanning and writing in a single call.
     ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots.
-    ///         Each slot scanned adds one storage read plus loop overhead (~100 gas warm,
-    ///         ~2,100 gas cold).
+    ///         Each slot scanned adds loop overhead and a storage read. Under Cancun gas rules,
+    ///         that read costs 100 gas for a warm slot and 2,100 gas for a cold slot.
     function findVacant(Pool storage pool, RecycleConfig cfg, uint256 searchPointer)
         internal
         view
