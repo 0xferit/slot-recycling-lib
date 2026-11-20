@@ -5,45 +5,17 @@ import {Test, console} from "forge-std/Test.sol";
 import {RawArticleStore} from "src/showcase/RawArticleStore.sol";
 import {RecycledArticleStore} from "src/showcase/RecycledArticleStore.sol";
 
-/// @title  ShowcaseGasTest
-/// @notice Gas benchmarks comparing RawArticleStore (standard delete) vs RecycledArticleStore
-///         (tombstoned slot recycling). All measurements happen within a single transaction,
-///         so storage accesses are warm. Scenarios in this contract cover both best-case
-///         reuse (including a zero-scan create-after-delete case) and scan-heavy reuse paths.
-///
-/// @dev    **Gas regression budgets.**
-///         Each key scenario has an explicit gas budget enforced via `assertLe`. The budgets
-///         include ~20-40% headroom above observed values to absorb compiler/EVM variation
-///         without producing false positives. If a budget is exceeded, CI will fail.
-///
-///         Current observed values (Solc 0.8.25, Foundry v1.5.1, optimizer runs = 0x10000):
-///           - Fresh allocation overhead (recycled):   ~29,200 gas
-///           - Best-case create-after-delete:          ~2,800 gas
-///           - Realistic scan (5 occupied slots):      ~3,900 gas
-///           - Lifecycle (20 creates, 10 deletes):     ~325,000 gas
-///
-///         **Updating budgets.** When a deliberate change causes gas to exceed a budget:
-///           1. Run `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv` locally.
-///           2. Note the new observed values in the console output.
-///           3. Update the corresponding `GAS_BUDGET_*` constant below with ~20% headroom.
-///           4. Update the "Current observed values" comment above.
-///           5. If README benchmarks are affected, update those numbers too.
-///           6. Commit with a message explaining the tradeoff (e.g., "perf: accept +X gas for Y").
-///
-///         **Upgrading the toolchain.** When bumping Solc or Foundry pins:
-///           1. Update `solc_version` in `foundry.toml` and/or the Foundry `version` in all
-///              GitHub Actions workflows (`ci.yml`, `gas-badges.yml`, `release.yml`).
-///           2. Rerun `forge test --match-path test/showcase/ShowcaseGas.t.sol -vv`.
-///           3. Refresh `GAS_BUDGET_*` constants and the "Current observed values" comment if needed.
-///           4. Update README benchmark numbers if they changed.
-///           5. Ship all changes in a single PR.
+/// @title ShowcaseGasTest
+/// @notice Gross execution gas of showcase calls batched in a single Cancun transaction.
+/// @dev Gas deltas exclude transaction overhead and settlement refunds. Reused slots are warm
+///      and dirty because setup, deletion and reuse share the same transaction. The budgets
+///      apply to this workload. See docs/gas.md for the separate-transaction receipt benchmark.
 contract ShowcaseGasTest is Test {
     // -------------------------------------------------------------------------
     // Gas regression budgets (single source of truth)
     // -------------------------------------------------------------------------
     // Each constant caps the gas for its scenario. Values include ~20-40% slack
     // above observed measurements to prevent flaky failures across environments.
-    // See the contract NatSpec above for how to update these after an intentional change.
 
     /// @dev Fresh allocation via the recycled path (no prior delete, no reuse).
     uint256 internal constant GAS_BUDGET_FRESH_ALLOCATION = 35_000;
@@ -69,12 +41,9 @@ contract ShowcaseGasTest is Test {
     }
 
     /// @notice Measures gas for the create-after-delete scenario.
-    /// @dev    Scenario: create one article, delete it, then create another in the same slot.
-    ///         Raw path: delete zeros the slot, so the second create is zero-to-nonzero (expensive).
-    ///         Recycled path: free leaves a tombstone, so the second create is nonzero-to-nonzero (cheap).
-    ///         This is the best-case scenario for the library; real savings depend on scan overhead.
+    /// @dev    Measures the second create. Raw appends at a different fresh slot. Recycled
+    ///         overwrites the warm, dirty tombstone without crossing occupied slots.
     function test_gasComparison_recycledVsFresh() public {
-        // --- Raw path: create, delete (full zero), create again (zero-to-nonzero) ---
         raw.createArticle(100, 1);
         raw.deleteArticle(0);
 
@@ -82,7 +51,6 @@ contract ShowcaseGasTest is Test {
         raw.createArticle(200, 2);
         uint256 rawCreateAfterDelete = gasBefore - gasleft();
 
-        // --- Recycled path: create, free (tombstone), create again (nonzero-to-nonzero) ---
         recycled.createArticle(100, 1);
         recycled.deleteArticle(0);
 

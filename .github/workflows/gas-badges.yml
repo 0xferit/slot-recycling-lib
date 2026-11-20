@@ -14,16 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
-        with:
-          version: v1.5.1
-          cache: true
+      - name: Install pinned Forge
+        run: bash scripts/install-ci-forge.sh
 
       - name: Install dependencies
         run: forge soldeer install
 
-      - name: Run showcase gas benchmark
+      - name: Measure batched Cancun gross gas
         run: |
           set -o pipefail
           forge test --match-path test/showcase/ShowcaseGas.t.sol -vv | tee gas_output.txt
@@ -47,7 +44,7 @@ jobs:
           cat > .badges/recycling-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "lifecycle (50% reuse): gas saved",
+            "label": "Cancun batched lifecycle gross gas saved",
             "message": "${lifecycle_pct}%",
             "color": "brightgreen"
           }
@@ -56,7 +53,7 @@ jobs:
           cat > .badges/bestcase-savings.json <<EOF
           {
             "schemaVersion": 1,
-            "label": "per recycled write: gas saved",
+            "label": "Cancun batched recreate gross gas saved",
             "message": "${bestcase_pct}%",
             "color": "brightgreen"
           }

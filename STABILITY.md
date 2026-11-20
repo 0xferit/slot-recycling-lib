@@ -20,7 +20,7 @@ and fixes or internal-only changes are **patch** releases.
 ## What is NOT public API
 
 - Internal constants such as `VERSION` (informational, may change on any release).
-- Showcase contracts under `src/showcase/` (reference implementations, not importable API).
+- Unrestricted gas benchmark fixtures under `src/showcase/`.
 - Test files and scripts.
 - Gas costs (these may vary with compiler version and optimizer settings).
 
@@ -31,6 +31,12 @@ and fixes or internal-only changes are **patch** releases.
 | **major** | Any change to the public API surface listed above: renaming or removing a function, changing a signature or return type, renaming or removing an error, changing the `RecycleConfig` underlying type, altering the `Pool` struct layout, or breaking the documented import path. |
 | **minor** | Adding new public API surface that does not break existing consumers: new library functions, new error types, new helper types. |
 | **patch** | Bug fixes, performance improvements, documentation updates, internal refactoring, or tooling changes that do not alter the public API. |
+
+For Solidity source changes, the release workflow determines the bump from
+reviewed Conventional Commit messages since the previous version tag.
+Use `!` or a `BREAKING CHANGE:` footer for a major bump and `feat:` for a minor
+bump. Other source changes produce patch releases. The largest applicable
+bump takes precedence.
 
 ## Compatibility fixture
 

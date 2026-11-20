@@ -3,25 +3,21 @@
 This project includes a narrow Kontrol proof layer for the core library as a supplement to the
 Foundry fuzz and invariant test suite.
 
-Kontrol is used for machine-checked proofs over all symbolic inputs/states for selected properties.
-
 ## Scope
 
-Proof specs live in:
+Each proof starts with a fresh pool and uses the canonical vacancy range at bit offset 192 with
+width 56. [Proof specifications](../test/kontrol/ProofSlotRecyclingSolidity.sol)
 
-- `test/kontrol/ProofSlotRecyclingSolidity.sol`
+- `allocate` rejects a symbolic packed value whose vacancy bits are all zero, for any start index.
+- `free` rejects a full-word clear mask applied to a symbolic occupied value.
+- `freeWithSentinel` rejects a zero sentinel or the concrete sentinel with bit 192 set, for any index.
+- `freeWithSentinel` writes any valid symbolic sentinel at index zero in the occupied fixture.
+- Concrete allocation and free sequences check the tombstone and reuse at index zero.
+- The two concrete `findVacant` scenarios start at index zero in a fresh pool and after freeing that
+  slot. Each starts at an immediate vacancy.
 
-They cover:
-
-- `allocate` rejects writes whose vacancy bits are all zero.
-- `free` reverts when the tombstone would be zero, and writes a non-zero tombstone with vacancy
-  bits cleared on success.
-- `freeWithSentinel` reverts on zero or occupied (vacancy-bit-set) sentinel, and writes the
-  non-zero sentinel with vacancy bits cleared on success.
-- `allocate` reuses a just-freed slot when the search pointer makes that slot eligible.
-- `findVacant` agrees with the harnessed occupancy scenario for the small states modelled.
-
-All proofs use the canonical `192/56` vacancy range (showcase-style config).
+Continuous integration runs the four rejection specifications. The full local run also includes the
+five success scenarios.
 
 ## Prerequisites
 
@@ -33,13 +29,13 @@ Example Apple Silicon install for Kontrol:
 APPLE_SILICON=true UV_PYTHON=3.10 kup install kontrol --version v1.0.231
 ```
 
-The helper script uses the native `kontrol` binary. Docker is only used in CI, where the image is
+The helper script uses the native `kontrol` binary. Continuous integration uses the Docker image
 pinned in `.github/workflows/ci.yml`.
 
 ## Commands
 
 ```bash
-# Show available proofs/specs
+# List saved proof results
 ./script/kontrol.sh list
 
 # Prove core (revert-condition) Solidity specs
@@ -51,18 +47,23 @@ pinned in `.github/workflows/ci.yml`.
 # Prove all Solidity specs
 ./script/kontrol.sh prove-core-full
 
-# Remove local proof artifacts
+# Remove saved proofs and toolchain metadata
 ./script/kontrol.sh clean
 ```
 
 ## Artifacts
 
-Kontrol artifacts are written under `.kontrol/` (gitignored).
+Kontrol saves proof graphs and compiled definitions inside Foundry's configured build output.
+The wrapper records its toolchain metadata separately. Its `clean` command removes the saved
+graphs and metadata and retains the compiled definitions and other build output.
+[Foundry configuration](../foundry.toml), [Kontrol wrapper](../script/kontrol.sh)
+
+The wrapper reports a failed proof command immediately. Kontrol owns the solver processes it starts.
 
 ## Counterexample workflow
 
 If a proof fails:
 
 1. Re-run the specific proof with `kontrol prove --match-test "<Contract.proof_name>"`.
-2. Inspect generated proof artifacts under `.kontrol/`.
-3. Use `kontrol show`, `kontrol list`, and `kontrol view-kcfg` for proof state/debugging.
+2. Use `kontrol list` to identify the saved proof.
+3. Inspect the proof state with `kontrol show` or `kontrol view-kcfg`.

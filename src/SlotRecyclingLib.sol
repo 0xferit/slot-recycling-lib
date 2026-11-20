@@ -7,9 +7,10 @@ pragma solidity ^0.8.25;
  * @custom:security-contact ferit@cryptolab.net
  * @notice Library for recycling freed mapping slots to avoid zero-to-nonzero SSTORE costs.
  *
- *         EVM charges ~20,000 gas for a zero-to-nonzero SSTORE but only ~2,900 gas (warm) for
- *         nonzero-to-nonzero. In mapping-backed collections with churn, freed slots can be reused
- *         for new items by leaving a non-zero "tombstone" on deletion instead of fully zeroing.
+ *         Under Cancun gas rules, when a warm storage slot still holds its transaction-start value,
+ *         writing a different non-zero value costs 20,000 gas for a zero slot and 2,900 gas for a
+ *         non-zero slot.
+ *         A non-zero "tombstone" on deletion keeps a freed slot cheaper to reuse across transactions.
  *
  *         The `RecycleConfig` value type wraps a precomputed `uint256` vacancy mask. The mask has
  *         consecutive bits set at the position and width specified during `create()`.
@@ -26,8 +27,9 @@ pragma solidity ^0.8.25;
  *         SlotRecyclingLib.free(_pool, CFG, idx, CLEAR_MASK);
  *         ```
  *
- *         **Important:** Always construct `RecycleConfig` values via `create()`. Using
- *         `RecycleConfig.wrap()` directly bypasses validation and produces undefined behavior.
+ *         **Important:** Construct `RecycleConfig` values with `create()` and use the same
+ *         vacancy mask for every operation on a pool. Migrate stored words before using a
+ *         different mask on an existing pool.
  */
 type RecycleConfig is uint256;
 
@@ -40,7 +42,7 @@ error TombstoneIsZero();
 /// @notice Thrown by `allocate` when the packed value has vacancy flag bits all-zero.
 error VacancyFlagNotSet(uint256 packedValue);
 
-/// @notice Thrown by `free` when clearMask does not cover the vacancy flag bits.
+/// @notice Thrown by `free` when the resulting tombstone still has any vacancy flag bits set.
 error ClearMaskIncomplete(uint256 clearMask);
 
 /// @notice Thrown by `freeWithSentinel` when the sentinel has vacancy flag bits set.
@@ -61,7 +63,7 @@ library SlotRecyclingLib {
     // -------------------------------------------------------------------------
 
     /// @notice Creates a `RecycleConfig` from vacancyBitOffset and vacancyBitWidth.
-    /// @dev    Both parameters must be multiples of 8. vacancyBitWidth must be >= 8.
+    /// @dev    Both parameters must be multiples of 8. vacancyBitWidth must be in [8, 248].
     ///         vacancyBitOffset + vacancyBitWidth must be <= 256.
     ///         The returned config wraps the precomputed vacancy mask.
     ///         **Byte-alignment:** the multiples-of-8 constraint is a deliberate design choice, not
@@ -120,12 +122,11 @@ library SlotRecyclingLib {
     // Core functions
     // -------------------------------------------------------------------------
 
-    /// @notice Scan forward from `searchPointer` until a vacant slot is found, then write `packedValue`.
+    /// @notice Write `packedValue` to the first vacant slot in the cyclic scan used by `findVacant`.
     /// @dev    Reverts with `VacancyFlagNotSet` if the vacancy flag bits in `packedValue` are all zero,
     ///         since the slot would appear vacant immediately after writing.
-    ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots from
-    ///         `searchPointer`. Each slot scanned adds one storage read plus loop overhead (~100 gas
-    ///         warm, ~2,100 gas cold). Use `findVacant` off-chain to compute a tight hint.
+    ///         **Gas warning:** scan cost grows with the contiguous run of occupied slots.
+    ///         Use `findVacant` off-chain to compute a hint for the current state.
     /// @return index The slot index where `packedValue` was stored.
     function allocate(Pool storage pool, RecycleConfig cfg, uint256 searchPointer, uint256 packedValue)
         internal
@@ -137,7 +138,7 @@ library SlotRecyclingLib {
         uint256 ptr = searchPointer;
         while ((pool._data[ptr] & mask) != 0) {
             unchecked {
-                ptr++; // Wraparound infeasible: requires 2^256 occupied slots.
+                ptr++;
             }
         }
         pool._data[ptr] = packedValue;
@@ -146,7 +147,8 @@ library SlotRecyclingLib {
 
     /// @notice Mark a slot as vacant by clearing bits specified in `clearMask`.
     /// @dev    The remaining bits form the "tombstone" that keeps the slot non-zero.
-    ///         Reverts with `TombstoneIsZero` if the result would be zero.
+    ///         Reverts with `TombstoneIsZero` if the result would be zero, or with
+    ///         `ClearMaskIncomplete` if the result would still contain set vacancy flag bits.
     ///         Does not check whether the slot is currently occupied; freeing an already-vacant
     ///         slot is silently permitted if the resulting tombstone is non-zero.
     /// @return freedValue The original value that was in the slot before freeing.
@@ -157,7 +159,6 @@ library SlotRecyclingLib {
         freedValue = pool._data[index];
         uint256 tombstone = freedValue & ~clearMask;
         if (tombstone == 0) revert TombstoneIsZero();
-        // Verify vacancy flag is actually cleared.
         uint256 mask = vacancyMask(cfg);
         if ((tombstone & mask) != 0) {
             revert ClearMaskIncomplete(clearMask);
@@ -189,7 +190,8 @@ library SlotRecyclingLib {
 
     /// @notice Write a raw packed value at `index` without scanning for vacancy.
     /// @dev    **Invariant bypass:** this function does not check vacancy or the vacancy flag.
-    ///         Writing zero or a value with vacancy bits unset will corrupt pool state.
+    ///         Writing zero discards a tombstone. Any value with all vacancy flag bits unset
+    ///         is available for reuse, including a value the caller meant to keep occupied.
     ///         Use `allocate` for safe writes; use this only for advanced migration scenarios.
     function store(Pool storage pool, uint256 index, uint256 packedValue) internal {
         pool._data[index] = packedValue;
@@ -200,12 +202,13 @@ library SlotRecyclingLib {
         return (pool._data[index] & vacancyMask(cfg)) == 0;
     }
 
-    /// @notice Find the next vacant slot starting from `searchPointer`.
+    /// @notice Find the first vacant slot, scanning from `searchPointer` and continuing at zero
+    ///         after the maximum index.
     /// @dev    Intended for off-chain use (view). On-chain callers should use `allocate` which
     ///         combines scanning and writing in a single call.
     ///         **Gas warning:** the scan is O(n) in the number of contiguous occupied slots.
-    ///         Each slot scanned adds one storage read plus loop overhead (~100 gas warm,
-    ///         ~2,100 gas cold).
+    ///         Each slot scanned adds loop overhead and a storage read. Under Cancun gas rules,
+    ///         that read costs 100 gas for a warm slot and 2,100 gas for a cold slot.
     function findVacant(Pool storage pool, RecycleConfig cfg, uint256 searchPointer)
         internal
         view
@@ -215,7 +218,7 @@ library SlotRecyclingLib {
         uint256 ptr = searchPointer;
         while ((pool._data[ptr] & mask) != 0) {
             unchecked {
-                ptr++; // Wraparound infeasible: requires 2^256 occupied slots.
+                ptr++;
             }
         }
         return ptr;

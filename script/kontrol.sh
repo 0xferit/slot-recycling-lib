@@ -8,7 +8,6 @@ CONFIG_PROFILE="${KONTROL_CONFIG_PROFILE:-local}"
 LOCAL_HI_PROFILE="${KONTROL_LOCAL_HI_PROFILE:-local-hi}"
 KONTROL_BIN="${KONTROL_BIN:-kontrol}"
 KONTROL_REINIT="${KONTROL_REINIT:-1}"
-KONTROL_PROVE_RETRIES="${KONTROL_PROVE_RETRIES:-3}"
 
 SOLIDITY_ESSENTIAL_REGEX="${KONTROL_SOLIDITY_ESSENTIAL_REGEX:-ProofSlotRecyclingSolidity.prove_.*_reverts}"
 SOLIDITY_FULL_REGEX="${KONTROL_SOLIDITY_FULL_REGEX:-ProofSlotRecyclingSolidity.prove_.*}"
@@ -19,37 +18,15 @@ Usage: ./script/kontrol.sh <command>
 
 Commands:
   prove-core      Build and prove essential Solidity Kontrol specs (native host Kontrol).
-  prove-core-hi   Build and prove Solidity-focused specs with the local-hi profile.
+  prove-core-hi   Build and prove essential Solidity specs with the local-hi profile.
   prove-core-full Build and prove full Solidity Kontrol spec set.
-  list            List discovered Kontrol tests/specs (native host Kontrol).
-  clean           Remove local Kontrol artifacts (.kontrol/).
+  list            List saved Kontrol proof results.
+  clean           Remove saved proofs and local toolchain metadata.
 EOF
 }
 
 run_kontrol() {
   "${KONTROL_BIN}" "$@"
-}
-
-run_kontrol_prove_with_retries() {
-  local retries="${KONTROL_PROVE_RETRIES}"
-  local -a prove_args=("$@")
-
-  local attempt
-  for ((attempt = 1; attempt <= retries; attempt++)); do
-    set +e
-    run_kontrol "${prove_args[@]}"
-    local status=$?
-    set -e
-    if [[ "${status}" -eq 0 ]]; then
-      return 0
-    fi
-    if (( attempt == retries )); then
-      return "${status}"
-    fi
-    echo "Kontrol prove failed (attempt ${attempt}/${retries}); retrying..."
-    pkill -f 'kore-rpc out/kompiled/definition.kore' >/dev/null 2>&1 || true
-    sleep 2
-  done
 }
 
 ensure_runtime() {
@@ -66,7 +43,6 @@ EOF
     echo "Foundry (forge) is required but not installed." >&2
     exit 1
   fi
-
 }
 
 write_toolchain_metadata() {
@@ -97,7 +73,7 @@ prove_matches() {
     if [[ "${KONTROL_REINIT}" == "1" ]]; then
       prove_args+=(--reinit)
     fi
-    run_kontrol_prove_with_retries "${prove_args[@]}"
+    run_kontrol "${prove_args[@]}"
   done
 }
 
@@ -120,13 +96,13 @@ case "${1:-}" in
   list)
     cd "${ROOT_DIR}"
     ensure_runtime
-    write_toolchain_metadata
-    mkdir -p "${ROOT_DIR}/out/proofs"
-    run_kontrol build --config-file "${CONFIG_FILE}" --config-profile "${CONFIG_PROFILE}"
-    run_kontrol list --config-file "${CONFIG_FILE}"
+    run_kontrol list --config-file "${CONFIG_FILE}" --config-profile "${CONFIG_PROFILE}"
     ;;
   clean)
-    rm -rf "${ARTIFACT_DIR}"
+    cd "${ROOT_DIR}"
+    ensure_runtime
+    run_kontrol clean --proofs --config-file "${CONFIG_FILE}" --config-profile "${CONFIG_PROFILE}"
+    rm -f "${ARTIFACT_DIR}/local-toolchain.txt"
     ;;
   *)
     usage

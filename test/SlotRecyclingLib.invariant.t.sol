@@ -8,6 +8,7 @@ import {RecycleConfig, SlotRecyclingLib} from "src/SlotRecyclingLib.sol";
 ///         Tracks which slots are occupied so the invariant test can verify properties.
 contract PoolHandler {
     SlotRecyclingLib.Pool private _pool;
+    uint256 private constant OWNER_BITS = 1;
     RecycleConfig public immutable CFG = SlotRecyclingLib.create(192, 56);
     uint256 public constant VACANCY_MASK = ((uint256(1) << 56) - 1) << 192;
     uint256 public constant CLEAR_MASK = (((uint256(1) << 56) - 1) << 192) | (((uint256(1) << 32) - 1) << 160);
@@ -21,7 +22,7 @@ contract PoolHandler {
     /// @notice Allocate a slot with a random-ish packed value.
     function doAllocate(uint56 bountyAmount, uint8 category) external {
         if (bountyAmount == 0) bountyAmount = 1;
-        uint256 packed = uint256(uint160(msg.sender)) | (uint256(bountyAmount) << 192) | (uint256(category) << 248);
+        uint256 packed = OWNER_BITS | (uint256(bountyAmount) << 192) | (uint256(category) << 248);
 
         uint256 idx = SlotRecyclingLib.allocate(_pool, CFG, 0, packed);
         occupied[idx] = true;

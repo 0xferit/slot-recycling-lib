@@ -84,19 +84,27 @@ jobs:
 
       - name: Checkout repository
         if: steps.prereqs.outputs.should_run == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           fetch-depth: 1
+
+      - name: Fetch the pinned review plugin
+        if: steps.prereqs.outputs.should_run == 'true'
+        run: |
+          marketplace="$RUNNER_TEMP/claude-plugins-official"
+          git init --quiet "$marketplace"
+          git -C "$marketplace" fetch --quiet --depth=1 https://github.com/anthropics/claude-plugins-official.git 9780cf407f5593727b668bae95a0c4ae2e0de1ae
+          git -C "$marketplace" checkout --quiet --detach FETCH_HEAD
 
       - name: Run Claude Code Review
         id: claude-review
         if: steps.prereqs.outputs.should_run == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: '--model opus --effort max'
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
+          plugin_marketplaces: '${{ runner.temp }}/claude-plugins-official'
+          plugins: 'code-review@claude-plugins-official'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
 
       - name: Report skipped Claude review
