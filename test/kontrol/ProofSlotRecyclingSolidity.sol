@@ -31,8 +31,7 @@ contract ProofSlotRecyclingSolidity is ProofAssumptions {
     uint256 internal constant LIVE_VALUE = OWNER_BITS | BOUNTY_BITS | CATEGORY_BITS;
 
     // clearMask covers bounty (bits 192-247) and withdrawalPermittedAt (bits 160-191).
-    uint256 internal constant CLEAR_MASK =
-        (((uint256(1) << 56) - 1) << 192) | (((uint256(1) << 32) - 1) << 160);
+    uint256 internal constant CLEAR_MASK = (((uint256(1) << 56) - 1) << 192) | (((uint256(1) << 32) - 1) << 160);
 
     function _canonicalConfig() internal pure returns (RecycleConfig) {
         return SlotRecyclingLib.create(192, 56);
