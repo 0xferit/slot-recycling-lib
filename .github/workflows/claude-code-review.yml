@@ -102,9 +102,7 @@ jobs:
         uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--model opus --effort max'
-          plugin_marketplaces: '${{ runner.temp }}/claude-plugins-official'
-          plugins: 'code-review@claude-plugins-official'
+          claude_args: '--model opus --effort max --plugin-dir "${{ runner.temp }}/claude-plugins-official/plugins/code-review"'
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
 
       - name: Report skipped Claude review
