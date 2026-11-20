@@ -1,97 +1,174 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable release version to retry (for example, 1.2.3)
+        required: true
+        type: string
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+permissions: {}
+
+env:
+  FOUNDRY_VERSION: v1.5.1
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  release:
-    name: Semantic Release
+  verify:
+    name: Verify release candidate
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.path == '.github/workflows/ci.yml')
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
-      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      commit: ${{ steps.candidate.outputs.commit }}
+      source: ${{ steps.candidate.outputs.source }}
+      version: ${{ steps.candidate.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version: 'lts/*'
-
-      - name: Install semantic-release and Claude Code
-        run: |
-          # claude-code: postinstall fetches its native binary, so no --ignore-scripts;
-          # the exact version pin fixes the script content instead.
-          npm install -g @anthropic-ai/claude-code@2.1.156
-          npm install --no-save --ignore-scripts \
-            semantic-release@25.0.3 \
-            @semantic-release/changelog@6.0.3 \
-            @semantic-release/exec@7.1.0 \
-            @semantic-release/git@10.0.1 \
-            @semantic-release/github@12.0.8 \
-            conventional-changelog-conventionalcommits@9.3.1
-
-      - name: Release
-        id: semantic
+      - name: Prepare release from verified main history
+        id: candidate
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+          RETRY_VERSION: ${{ inputs.version }}
         run: |
-          BEFORE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          npx semantic-release
-          git fetch --tags
-          AFTER_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          if [ "$BEFORE_TAG" != "$AFTER_TAG" ]; then
-            echo "new_release_published=true" >> $GITHUB_OUTPUT
-            echo "new_release_version=${AFTER_TAG#v}" >> $GITHUB_OUTPUT
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          main=$(git rev-parse refs/remotes/origin/main)
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            if [[ "$CI_SHA" != "$main" ]]; then
+              echo "::notice::Skipping CI run for a superseded main revision"
+              exit 0
+            fi
+            release=$(python3 scripts/release.py prepare "$CI_SHA")
           else
-            echo "new_release_published=false" >> $GITHUB_OUTPUT
+            release=$(python3 scripts/release.py retry "$RETRY_VERSION" "$main")
+          fi
+          if [[ "$release" == "null" ]]; then
+            exit 0
           fi
 
-  soldeer-publish:
-    name: Publish to Soldeer
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout release tag
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          ref: v${{ needs.release.outputs.new_release_version }}
+          source=$(jq -er '.source' <<<"$release")
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f branch=main -f event=push -f status=success -f head_sha="$source" \
+            | jq -e --arg source "$source" --arg repo "$GITHUB_REPOSITORY" '
+              any(.workflow_runs[]; .head_sha == $source and .head_branch == "main" and
+                  .head_repository.full_name == $repo and .event == "push" and
+                  .conclusion == "success")' >/dev/null
+
+          jq -r 'to_entries[] | [.key, .value] | join("=")' <<<"$release" >> "$GITHUB_OUTPUT"
 
       - name: Install Foundry
+        if: steps.candidate.outputs.commit != ''
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
         with:
-          version: v1.5.1
+          version: ${{ env.FOUNDRY_VERSION }}
 
-      - name: Publish to Soldeer registry
+      - name: Verify exact release commit
+        if: steps.candidate.outputs.commit != ''
+        env:
+          RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+          forge soldeer install
+          forge build
+          forge test -vvv
+          python3 scripts/release.py check-package "$RELEASE_COMMIT" "$RELEASE_VERSION"
+
+  publish:
+    name: Publish verified release
+    needs: verify
+    if: needs.verify.outputs.commit != ''
+    concurrency:
+      group: package-release
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_COMMIT: ${{ needs.verify.outputs.commit }}
+      RELEASE_SOURCE: ${{ needs.verify.outputs.source }}
+      RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin verified release tag
+        id: pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          main=$(git rev-parse refs/remotes/origin/main)
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            if [[ "$RELEASE_SOURCE" != "$main" ]]; then
+              echo "::notice::Skipping release because main has advanced"
+              exit 0
+            fi
+            release=$(python3 scripts/release.py prepare "$RELEASE_SOURCE")
+          else
+            release=$(python3 scripts/release.py retry "$RELEASE_VERSION" "$main")
+          fi
+
+          test "$(jq -er '.commit' <<<"$release")" = "$RELEASE_COMMIT"
+          test "$(jq -er '.version' <<<"$release")" = "$RELEASE_VERSION"
+          test "$(git rev-parse HEAD^)" = "$RELEASE_SOURCE"
+          tag="v$RELEASE_VERSION"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+              push --atomic --force-with-lease="refs/heads/main:$RELEASE_SOURCE" origin \
+              "$RELEASE_COMMIT:refs/heads/main" "$RELEASE_COMMIT:refs/tags/$tag"
+          fi
+          remote_tag=$(git ls-remote origin "refs/tags/$tag")
+          test "${remote_tag%%[[:space:]]*}" = "$RELEASE_COMMIT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Install Foundry
+        if: steps.pin.outputs.tag != ''
+        uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1.8.0
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Publish and verify Soldeer package
+        if: steps.pin.outputs.tag != ''
         env:
           SOLDEER_API_TOKEN: ${{ secrets.SOLDEER_API_TOKEN }}
-        run: |
-          if [ -z "$SOLDEER_API_TOKEN" ]; then
-            echo "::error::SOLDEER_API_TOKEN secret is not set"
-            exit 1
-          fi
-          VERSION=${{ needs.release.outputs.new_release_version }}
-          echo "Publishing slot-recycling-lib~$VERSION to Soldeer..."
-          forge soldeer push slot-recycling-lib~"$VERSION" --skip-warnings 2>&1 | tee /tmp/soldeer-output.log
-          if grep -q "error during" /tmp/soldeer-output.log; then
-            echo "::error::Soldeer push failed"
-            exit 1
-          fi
+        run: python3 scripts/release.py publish-package "$RELEASE_COMMIT" "$RELEASE_VERSION"
 
-      - name: Tag last Soldeer publish
+      - name: Create GitHub release
+        if: steps.pin.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.pin.outputs.tag }}
         run: |
-          git tag -f soldeer-published
-          git push origin soldeer-published --force
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null; then
+            notes=$(mktemp "$RUNNER_TEMP/release-notes.XXXXXX")
+            python3 scripts/release.py notes "$RELEASE_COMMIT" "$RELEASE_VERSION" > "$notes"
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "$RELEASE_TAG" --notes-file "$notes"
+          fi

@@ -32,6 +32,12 @@ and fixes or internal-only changes are **patch** releases.
 | **minor** | Adding new public API surface that does not break existing consumers: new library functions, new error types, new helper types. |
 | **patch** | Bug fixes, performance improvements, documentation updates, internal refactoring, or tooling changes that do not alter the public API. |
 
+For Solidity source changes, the release workflow determines the bump from
+reviewed Conventional Commit messages since the previous version tag.
+Use `!` or a `BREAKING CHANGE:` footer for a major bump and `feat:` for a minor
+bump. Other source changes produce patch releases. The largest applicable
+bump takes precedence.
+
 ## Compatibility fixture
 
 The file `test/compat/PublicApiCompat.t.sol` is a compile-time guard for the
