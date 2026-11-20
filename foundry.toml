@@ -14,6 +14,7 @@ runs = 0x10000
 [invariant]
 runs = 256
 depth = 64
+fail_on_revert = true
 
 [dependencies]
 forge-std = "1.14.0"
