@@ -43,7 +43,7 @@ The release workflow generates `VERSION` and the changelog. Review the Conventio
 
 ## Gas regression budgets
 
-The batched Cancun tests own their gas ceilings. When a deliberate change exceeds a ceiling, record the measured cost and explain the tradeoff before proposing a new budget. Update the affected figures in [docs/gas.md](docs/gas.md) after measuring the matching workload.
+The batched Cancun tests own their gas ceilings. When a deliberate change exceeds a ceiling, record the measured cost and explain the tradeoff before proposing a new budget. Rerun the matching workload before updating the [receipt comparison](README.md#gas-measurements) or [storage controls](docs/gas.md#what-the-controls-verify).
 
 ## Pinned toolchain
 
