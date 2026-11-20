@@ -1,3 +1,7 @@
+## 1.1.1 (2026-11-20)
+
+- fix: verify slot recycling releases and measure transaction gas (#22) (`676c83bb76ff2ecd3458a81026eda9b395837a33`)
+
 ## [1.1.0](https://github.com/0xferit/slot-recycling-lib/compare/v1.0.10...v1.1.0) (2026-06-12)
 
 ### Features
