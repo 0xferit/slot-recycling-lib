@@ -52,7 +52,7 @@ error SentinelOccupied(uint256 sentinel);
 error BadBitmask(uint256 offset, uint256 width);
 
 library SlotRecyclingLib {
-    string internal constant VERSION = "1.1.0";
+    string internal constant VERSION = "1.1.1";
 
     struct Pool {
         mapping(uint256 => uint256) _data;
