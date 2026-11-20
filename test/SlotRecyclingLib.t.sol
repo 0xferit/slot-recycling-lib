@@ -193,6 +193,14 @@ contract SlotRecyclingLibTest is Test {
         harness.free(cfg, 0, badClearMask);
     }
 
+    function test_free_clearMaskMayOmitUnsetVacancyBits() public {
+        harness.allocate(cfg, 0, LIVE_VALUE);
+        harness.free(cfg, 0, BOUNTY_BITS);
+
+        assertEq(harness.load(0), OWNER_BITS | CATEGORY_BITS);
+        assertTrue(harness.isVacant(cfg, 0));
+    }
+
     // ── Free with sentinel ──
 
     function test_freeWithSentinel() public {
@@ -264,6 +272,16 @@ contract SlotRecyclingLibTest is Test {
         harness.allocate(cfg, 2, LIVE_VALUE | (uint256(77) << 192));
         harness.free(cfg, 1, CLEAR_MASK);
         assertEq(harness.findVacant(cfg, 0), 1);
+    }
+
+    function test_search_wrapsAfterOccupiedLastIndex() public {
+        uint256 lastIndex = type(uint256).max;
+        assertEq(harness.allocate(cfg, lastIndex, LIVE_VALUE), lastIndex);
+
+        assertEq(harness.findVacant(cfg, lastIndex), 0);
+        assertEq(harness.allocate(cfg, lastIndex, LIVE_VALUE), 0);
+        assertEq(harness.load(lastIndex), LIVE_VALUE);
+        assertEq(harness.load(0), LIVE_VALUE);
     }
 
     // ── Bitmask helper ──
