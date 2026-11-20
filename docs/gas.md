@@ -48,26 +48,25 @@ the path to the chosen Anvil executable.
 python3 scripts/benchmark-receipts.py --hardfork amsterdam --anvil "$AMSTERDAM_ANVIL"
 ```
 
-Before measuring, the script writes, clears or tombstones, and rewrites the
-same slot in separate transactions. It checks storage-write traces and net
-receipts against the expected prices, including the refund cap on deletion.
-Amsterdam must charge 110,020 gas for a cold fresh storage write and 12,100
-for a cold update. A client that prices those operations differently stops at
-the control. These figures apply to the draft rules exercised by the workload.
-The protocol rules and prices can change before activation.
-[EIP-8037](https://eips.ethereum.org/EIPS/eip-8037#parameter-changes),
-[EIP-8038](https://eips.ethereum.org/EIPS/eip-8038#sstore-pricing),
-[EIP-2780](https://eips.ethereum.org/EIPS/eip-2780#intrinsic-gas-costs),
-[EIP-7976](https://eips.ethereum.org/EIPS/eip-7976#specification).
+## What the controls verify
 
-| Fixture | Cancun 3 transactions | Cancun 30 transactions | Amsterdam 3 transactions | Amsterdam 30 transactions |
-|---|---:|---:|---:|---:|
-| Raw | 137,339 | 1,219,802 | 396,981 | 3,088,815 |
-| Recycled | 101,881 | 1,218,112 | 186,301 | 2,062,312 |
-| Recycled with hint | 146,559 | 1,195,718 | 410,760 | 2,356,499 |
+The storage control sends the same rewrite to the same mapping index in two fresh
+harnesses. Both first store the same nonzero word. One clears it to zero in a
+separate transaction, the other leaves a nonzero tombstone. The identical
+rewrite saves **17,100 receipt gas under Cancun** and **97,920 under the tested
+Glamsterdam draft**. These figures isolate the final write. The showcase
+comparison includes deletion and each store's bookkeeping. [Workload savings](../README.md#gas-measurements)
 
-The 30-transaction Cancun savings are about 0.14% without the hint and 1.97%
-with it. Under the draft Amsterdam schedule they are 33.23% and 23.71%.
-In the three-transaction workload the hinted fixture spends more gas than
-the raw fixture on both schedules. Deleting article zero resets the hint
-slot to zero, so the next create pays to initialize the hint again.
+The draft adds a transaction-wide state-gas reservoir. With a 4 million gas
+limit the reservoir starts empty, and a fresh cold storage write consumes
+110,020 gas from its execution frame. With a 20 million gas limit the same
+instruction consumes 12,100 frame gas and draws 97,920 from the reservoir.
+This is why a Solidity `gasleft()` difference can miss part of the sender's
+cost. The script compares every operation receipt at both gas limits before
+reporting the draft savings. [Ethereum Improvement Proposal 8037](https://eips.ethereum.org/EIPS/eip-8037#transaction-level-gas-accounting-reservoir-model) · [Storage write pricing](https://eips.ethereum.org/EIPS/eip-8038#sstore-pricing)
+
+The control also checks the refund for clearing a committed nonzero word. In
+the draft, appending zero bytes to a fresh write makes the calldata floor
+determine its receipt. The sender pays the greater of the total post-refund
+gas and the transaction's calldata floor. Block capacity uses separate
+execution and state counters. [Transaction settlement](https://eips.ethereum.org/EIPS/eip-8037#transaction-gas-used) · [Calldata floor](https://eips.ethereum.org/EIPS/eip-7976#specification) · [Transaction base cost](https://eips.ethereum.org/EIPS/eip-2780#interactions-with-other-eips)

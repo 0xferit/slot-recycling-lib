@@ -51,7 +51,16 @@ Here the vacancy field occupies bits 192 through 247. Each inserted word must se
 
 ## Gas measurements
 
-The badges measure gross call gas in a single Cancun transaction. Separate user transactions pay intrinsic gas, reset storage access warmth, and settle refunds individually. Comparisons also include each showcase's counter, hint, scans and events. Run the [gas benchmarks](docs/gas.md) for receipt-level measurements under Cancun and the tested Glamsterdam draft.
+Each operation below ran in a separate transaction. Savings use the sum of the raw store's receipts as the baseline and include scans, hint and counter writes, events, transaction overhead and refunds. The 3-operation workload creates, deletes and recreates one article. The 30-operation workload creates 20 articles and deletes 10.
+
+| Gas schedule | Operations | Raw gas | Recycled gas | Savings | Recycled gas with hint | Savings with hint |
+|---|---:|---:|---:|---:|---:|---:|
+| Cancun | 3 | 137,339 | 101,881 | 25.82% | 146,559 | −6.71% |
+| Glamsterdam draft | 3 | 396,981 | 186,301 | 53.07% | 410,760 | −3.47% |
+| Cancun | 30 | 1,219,802 | 1,218,112 | 0.14% | 1,195,718 | 1.97% |
+| Glamsterdam draft | 30 | 3,088,815 | 2,062,312 | 33.23% | 2,356,499 | 23.71% |
+
+Deleting article zero clears the stored hint, so the next create pays to initialize it again. That extra write makes the hinted three-operation workload more expensive on both schedules. The badges measure gross call gas for a single Cancun transaction. The Glamsterdam rows use the draft implemented by Anvil v1.9.0. Its gas rules can change before activation. [Reproduce the measurements](docs/gas.md)
 
 The [showcases](src/showcase/) are unrestricted gas fixtures. All three allow deletion by any caller. The recycled fixtures expose reusable slot indices. Moving a hint back to a freed slot helps nearby allocations, but a subsequent allocation can still scan an arbitrarily long occupied span.
 
